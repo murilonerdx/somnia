@@ -1,0 +1,30 @@
+id {
+    // Cognitive Parameters
+    drive speed     @0.9 // We prefer fast responses
+    drive accuracy  @0.3 // We care less about data being fresh
+
+    // Associations
+    "cache" -> "speed" @0.9
+    "api"   -> "accuracy" @0.8
+
+    // Decision Logic
+    // If the intent is to "fetch_user", and we prefer speed, use cache
+    when intent("fetch_user") and drive(speed)
+        => propose "com.example.demo.CacheProvider.get" "user_123" @0.8
+
+    // If accuracy is high (even if speed is active), API might win if weight is higher
+    when intent("fetch_user") and drive(accuracy)
+        => propose "somnia.stdlib.StdLib.http_get" "https://api.example.com/user/123" @0.9
+}
+
+ego {
+    // Suppress heavy API calls if energy is low (simulated)
+    // forbid "http_get" where battery < 20
+    
+    select top 1
+}
+
+act {
+    // Started by the Spring Controller
+    intent "fetch_user"
+}

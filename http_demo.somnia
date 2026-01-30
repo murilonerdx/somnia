@@ -1,0 +1,17 @@
+id {
+  // Drives
+  drive curiosity @0.9
+  
+  // Rules
+  when drive(curiosity)
+  => propose http_get("https://jsonplaceholder.typicode.com/todos/1") @0.8
+}
+
+ego {
+  select top 1
+}
+
+act {
+  intent "explore_web"
+  run http_get // capability
+}

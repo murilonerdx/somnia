@@ -1,0 +1,63 @@
+id {
+  // --- Archetypes (Classes) ---
+  archetype Operator { "plus", "minus", "multiply", "divide" }
+  archetype Number   { "zero", "one", "five", "ten" }
+  archetype Strategy { "quick", "precise", "estimate" }
+
+  // --- Drives (Motivations) ---
+  drive speed        @0.8
+  drive accuracy     @0.5
+
+  // --- Associations (Knowledge Graph) ---
+  "plus" -> "growth"       @0.5
+  "minus" -> "reduction"   @0.5
+  "five" -> "prime"        @0.2
+  
+  // Logical associations (if we think of 'five' and 'plus' we might think of 'more')
+  "five" -> "calculator"   @0.1
+  "plus" -> "calculator"   @0.6
+  
+  "speed" -> "quick"       @0.9
+  "accuracy" -> "precise"  @0.9
+
+  // --- Rules (Generative Logic) ---
+  
+  // If we want to calculate and we know numbers, propose an operation
+  when intent("calculate") and drive(speed)
+    => propose use_strategy("quick_estimate") @0.7
+
+  when intent("calculate") and drive(accuracy)
+    => propose use_strategy("precise_calculation") @0.9
+
+  // Summation Logic (Simulated)
+  // If we see two numbers in memory defined as traces, propose summing them
+  // (In a real system, 'trace' would be dynamic, here we hardcode the rule for the test)
+  when intent("calculate") 
+    => propose operation("sum_values") @0.5
+
+  // Associative Trigger
+  // If 'calculator' is active (via association), propose opening tool
+  // This rule has low base weight but can win if associations boost it
+  when intent("calculate")
+    => propose tool("open_calculator_app") @0.2
+}
+
+ego {
+  // --- Constraints ---
+  forbid "estimate" where context == "financial" // Simulated
+  
+  // We want the best solution
+  select top 2
+}
+
+act {
+  // --- Conscious Goals ---
+  intent "calculate"
+  
+  // We 'simulate' input of numbers by declaring them as traces (active memory)
+  // Converting 'trace' keyword in ID vs 'run' in ACT. 
+  // Normally Inputs act as Cues.
+  // We will assume 'intent' triggers the "calculate" flow.
+  
+  run execute_plan
+}

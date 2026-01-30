@@ -1,0 +1,27 @@
+package somnia.std
+
+pattern StandardCrud(Entity) {
+  repository "${Entity}Repository" : jpa <Entity, UUID> {
+    fun save(item: Entity): Entity
+    fun findAll(): List
+    fun deleteById(id: UUID): Void
+  }
+
+  action "${Entity}s.create"(req: "com.example.crud.dto.Create${Entity}Request") permission("db.write") returns Entity
+    bind tx required {
+       bind repo "${Entity}Repository".save(req)
+    }
+
+  action "${Entity}s.list"() permission("db.read") returns Json
+    bind sql "select * from ${Entity}s"
+
+  // Using dynamic intents
+  http {
+    on POST "/${Entity}s" as intent("${Entity}s.create")
+      body "com.example.crud.dto.Create${Entity}Request"
+    on GET "/${Entity}s" as intent("${Entity}s.list")
+  }
+
+  render "${Entity}s.create" using "${Entity}s.create"
+  render "${Entity}s.list" using "${Entity}s.list"
+}

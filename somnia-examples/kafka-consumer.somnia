@@ -1,0 +1,51 @@
+app "event-consumer" {
+    package "somnia.examples.events"
+    spring boot "3.2.0"
+}
+
+act {
+    // --- Kafka Infrastructure ---
+    
+    kafka "cluster" {
+        topic "orders" {
+            key "String"
+            value "Json"
+            consumer_group "order-processor"
+        }
+    }
+
+    // --- Persistent State ---
+
+    entity Order {
+        table "orders"
+        id: String
+        amount: Double
+        status: String
+    }
+
+    repository OrderRepo {
+        entity Order
+        id String
+        fun save(o: Order): Order
+    }
+
+    // --- Event Handler ---
+    
+    intent "process_new_order"
+
+    action orders.handle_new(id: String, amount: Double)
+        bind repo OrderRepo.save({
+            "id": id,
+            "amount": amount,
+            "status": "RECEIVED"
+        })
+
+    // --- Trigger ---
+
+    // Maps topic "orders" to intent "process_new_order"
+    // The payload is automatically mapped to arguments
+    trigger kafka "orders" => "process_new_order" (
+        id: String,
+        amount: Double
+    )
+}

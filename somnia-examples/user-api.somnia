@@ -1,0 +1,50 @@
+app "user-api" {
+    package "somnia.examples.user"
+    spring boot "3.2.0"
+}
+
+act {
+    entity User {
+        table "users"
+        id: String
+        name: String
+        email: String
+        active: Boolean
+    }
+
+    repository UserRepo {
+        entity User
+        id String
+        fun save(user: User): User
+        fun findById(id: String): User
+        fun findAll(): List<User>
+        fun deleteById(id: String): Void
+    }
+
+    // --- Actions ---
+
+    action users.create(name: String, email: String)
+        bind repo UserRepo.save({
+            "name": name,
+            "email": email,
+            "active": true
+        })
+
+    action users.get(id: String)
+        bind repo UserRepo.findById(id)
+
+    action users.list()
+        bind repo UserRepo.findAll()
+
+    action users.delete(id: String)
+        bind repo UserRepo.deleteById(id)
+
+    // --- HTTP Binding ---
+
+    http on "http://localhost:8080" {
+        POST   "/users"      => "users.create"
+        GET    "/users/{id}" => "users.get"
+        GET    "/users"      => "users.list"
+        DELETE "/users/{id}" => "users.delete"
+    }
+}

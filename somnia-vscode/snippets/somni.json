@@ -1,0 +1,42 @@
+{
+    "Somnia skeleton": {
+        "prefix": "somnia",
+        "body": [
+            "id {",
+            "  drive novelty @0.60",
+            "  affect curiosity @0.50",
+            "",
+            "  when intent(\"${1:intent_name}\") and drive(novelty)",
+            "    => propose outline(\"gancho\", \"3 pontos\", \"fecho\") @0.70",
+            "}",
+            "",
+            "ego {",
+            "  attention budget 1000",
+            "  dream cycles 3",
+            "  beam 30",
+            "  select top 5",
+            "  consolidate into plan",
+            "}",
+            "",
+            "act {",
+            "  intent \"${1:intent_name}\"",
+            "  action emit_script(plan) permission(\"disk\")",
+            "  expose http GET \"/\" as intent(\"${1:intent_name}\")",
+            "  run emit_script",
+            "}"
+        ]
+    },
+    "Expose HTTP": {
+        "prefix": "exposehttp",
+        "body": [
+            "expose http ${1:GET} \"${2:/path}\" as intent(\"${3:intent.name}\")"
+        ]
+    },
+    "When propose": {
+        "prefix": "when",
+        "body": [
+            "when intent(\"${1:intent}\") and drive(${2:driveName})",
+            "  => propose ${3:proposal}(\"${4:arg}\") @${5:0.70}"
+        ]
+    }
+}

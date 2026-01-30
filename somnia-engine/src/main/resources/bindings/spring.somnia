@@ -1,0 +1,15 @@
+// BINDINGS: Maps Somnia concepts to Java/Spring calls
+
+id {
+    // Register concepts representing external tools
+    concept "database"
+    concept "logger"
+    
+    // Association: Logging helps debugging (which implies satisfaction?)
+    "logger" -> "user_satisfaction" @0.1
+}
+
+id {
+    // Example Rule: Link the 'log' action to the Spring Logger
+    // Note: We don't implement logic here, just definitions
+}

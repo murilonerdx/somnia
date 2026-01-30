@@ -1,0 +1,15 @@
+// APPLICATION: GenOne
+// ENTRY POINT
+
+id {
+   drive user_satisfaction @0.5
+   
+   // Rule: When app starts, say hello via native print
+   when intent("start_app") 
+      => propose print ">>> PURE SOMNIA IS RUNNING <<<" @1.0
+}
+
+act {
+   // Default intent listener
+   intent "start_app"
+}

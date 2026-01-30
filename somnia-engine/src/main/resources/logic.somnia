@@ -1,0 +1,22 @@
+id {
+    // Basic Needs
+    drive curiosity @0.9
+
+    // Rules
+    // If we want to check external status, call HTTP
+    when intent("check_status") 
+        => propose http_get("https://jsonplaceholder.typicode.com/todos/1") @0.9
+        
+    when intent("hello")
+        => propose print("Hello from Spring Boot + SOMNIA!") @1.0
+}
+
+ego {
+    select top 1
+}
+
+act {
+    intent "default"
+    run http_get
+    run print
+}

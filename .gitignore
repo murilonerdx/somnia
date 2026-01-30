@@ -1,0 +1,26 @@
+# Gradle
+.gradle/
+build/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Logs & Temps
+*.log
+*.txt
+*.class
+*.tmp
+bin/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Spring Boot
+application-local.yaml

@@ -1,0 +1,14 @@
+// IMPLEMENTATION: Authentication Domain
+
+id {
+    drive security @0.8
+    
+    // If we want security, we should log things
+    when drive(security) 
+       => propose "java.lang.System.out.println" "[SECURITY AUDIT] System Secure" @0.9
+}
+
+ego {
+    // Always log security events
+    select top 3
+}

@@ -1,0 +1,16 @@
+id {
+    drive performance @0.8
+    
+    // Test: Intent-only trigger to verify unifier and registry
+    when intent("place_order")
+       => propose "businessService.processOrder" "ORD_TEST" "1.0" @1.0
+
+    // Full trigger
+    when intent("place_order") and drive(performance)
+       => propose "print" "SUCCESS: Somnia is driving Spring BusinessService" @0.9
+}
+
+act {
+    // Web Exposure: Maps /order to "place_order" intent
+    expose http POST "/order" as intent("place_order")
+}

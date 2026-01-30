@@ -1,0 +1,25 @@
+app "somnia-crud-app" {
+    package "com.example.crud"
+    spring boot "3.2.0"
+}
+
+// Import the Pure Somnia Library
+import "std/crud.somni"
+
+act {
+  entity Product table "products" {
+    id: UUID
+    name: String
+    price: Double
+    sku: String
+  }
+
+  dto CreateProductRequest {
+    name: String
+    price: Double
+    sku: String
+  }
+
+  // Use the Pattern Macro
+  pattern StandardCrud(Product)
+}

@@ -1,0 +1,57 @@
+app "somnia-crud-app" {
+    package "com.example.crud"
+    spring boot "3.2.0"
+}
+
+act {
+  entity Product table "products" {
+    id: UUID
+    name: String
+    price: Double
+    sku: String
+  }
+
+  dto CreateProductRequest {
+    name: String
+    price: Double
+    sku: String
+  }
+
+  repository ProductRepository : jpa <com.example.crud.model.Product, UUID> {
+    fun save(item: com.example.crud.model.Product): com.example.crud.model.Product
+    fun findAll(): List
+    fun deleteById(productId: UUID): Void
+  }
+
+  http {
+    base "/api"
+    on POST "/products" as intent("products.create")
+      body com.example.crud.dto.CreateProductRequest
+    on GET "/products" as intent("products.list")
+    on DELETE "/products/{productId}" as intent("products.remove")
+      args { productId: UUID }
+  }
+
+  action products.create(req: com.example.crud.dto.CreateProductRequest) permission("db.write") returns com.example.crud.model.Product
+    bind tx required {
+      bind repo ProductRepository.save({
+        "name": req.name,
+        "price": req.price,
+        "sku": req.sku
+      })
+    }
+
+  action products.list() permission("db.read") returns Json
+    bind sql "select id, name, price, sku from products order by name"
+
+  action products.remove(productId: UUID) permission("db.write") returns Json
+    bind repo ProductRepository.deleteById(productId)
+
+  render products.create {
+    products.create
+  }
+
+  render products.list {
+    products.list
+  }
+}
