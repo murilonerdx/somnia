@@ -1,9 +1,0 @@
-app "users-app" {
-    package "com.example.users"
-    spring boot "3.2.0"
-}
-
-// Just a basic act block to verify parsing later
-act {
-    intent "health_check"
-}
