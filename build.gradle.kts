@@ -7,5 +7,18 @@ plugins {
 allprojects {
     repositories {
         mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+
+subprojects {
+    apply(plugin = "maven-publish")
+
+    publishing {
+        publications {
+             create<MavenPublication>("maven") {
+                 from(components.findByName("java"))
+             }
+        }
     }
 }
