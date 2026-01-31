@@ -1,0 +1,73 @@
+# ============================================================================
+# Somnia REST API - Routes
+# Route definitions
+# ============================================================================
+
+import { create_server, HttpServer, HttpRequest, HttpResponse, json_response } from "../../somnia-http/lib/http"
+import { get_user_controller } from "./controllers/user_controller"
+import { logger_middleware, cors_middleware, rate_limiter } from "./middleware"
+import { now } from "../../somnia-stdlib/lib/utils"
+
+# ============================================================================
+# ROUTE SETUP
+# ============================================================================
+
+fun setup_routes(server: HttpServer) -> HttpServer {
+    # Middleware
+    server.use(logger_middleware)
+    server.use(cors_middleware)
+    server.use(rate_limiter(100, 60000))  # 100 requests per minute
+    
+    # Health check
+    server.get("/api/health", fun(req: HttpRequest) -> HttpResponse {
+        return json_response({
+            "status": "healthy",
+            "timestamp": now().to_iso_string(),
+            "version": "1.0.0"
+        })
+    })
+    
+    # API info
+    server.get("/api", fun(req: HttpRequest) -> HttpResponse {
+        return json_response({
+            "name": "Somnia REST API",
+            "version": "1.0.0",
+            "description": "A complete REST API built purely in Somnia",
+            "endpoints": {
+                "users": "/api/users",
+                "health": "/api/health"
+            }
+        })
+    })
+    
+    # User routes
+    var user_ctrl = get_user_controller()
+    
+    server.get("/api/users", fun(req: HttpRequest) -> HttpResponse {
+        return user_ctrl.list(req)
+    })
+    
+    server.get("/api/users/:id", fun(req: HttpRequest) -> HttpResponse {
+        return user_ctrl.get_by_id(req)
+    })
+    
+    server.post("/api/users", fun(req: HttpRequest) -> HttpResponse {
+        return user_ctrl.create(req)
+    })
+    
+    server.put("/api/users/:id", fun(req: HttpRequest) -> HttpResponse {
+        return user_ctrl.update(req)
+    })
+    
+    server.delete("/api/users/:id", fun(req: HttpRequest) -> HttpResponse {
+        return user_ctrl.delete(req)
+    })
+    
+    return server
+}
+
+# ============================================================================
+# EXPORTS
+# ============================================================================
+
+export { setup_routes }

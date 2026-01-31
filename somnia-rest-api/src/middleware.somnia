@@ -1,0 +1,129 @@
+# ============================================================================
+# Somnia REST API - Middleware
+# Request/Response middleware functions
+# ============================================================================
+
+import { HttpRequest, HttpResponse, error_response } from "../../somnia-http/lib/http"
+import { now } from "../../somnia-stdlib/lib/utils"
+
+# ============================================================================
+# LOGGING MIDDLEWARE
+# ============================================================================
+
+fun logger_middleware(req: HttpRequest) -> HttpResponse {
+    var timestamp = now().to_iso_string()
+    println("[" + timestamp + "] " + req.method.value + " " + req.path)
+    return null  # Continue to next middleware/handler
+}
+
+# ============================================================================
+# CORS MIDDLEWARE
+# ============================================================================
+
+fun cors_middleware(req: HttpRequest) -> HttpResponse {
+    # For OPTIONS requests, return CORS headers immediately
+    when req.method.value == "OPTIONS" => {
+        return response()
+            .with_status(204)
+            .with_header("Access-Control-Allow-Origin", "*")
+            .with_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+            .with_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+            .with_header("Access-Control-Max-Age", "86400")
+    }
+    return null  # Continue
+}
+
+# ============================================================================
+# CONTENT TYPE MIDDLEWARE
+# ============================================================================
+
+fun json_content_type_middleware(req: HttpRequest) -> HttpResponse {
+    var content_type = req.get_header("Content-Type")
+    
+    # Only check for methods with body
+    when req.method.value == "POST" or req.method.value == "PUT" or req.method.value == "PATCH" => {
+        when len(req.body) > 0 and content_type != "application/json" => {
+            # Allow if no content type but has JSON body
+            when len(content_type) > 0 and not string_contains(content_type, "json") => {
+                return error_response(415, "Unsupported Media Type. Use application/json")
+            }
+        }
+    }
+    
+    return null  # Continue
+}
+
+fun string_contains(str: string, search: string) -> bool {
+    for i in range(0, len(str) - len(search) + 1) {
+        var match = true
+        for j in range(0, len(search)) {
+            when string_substring(str, i + j, i + j + 1) != string_substring(search, j, j + 1) => {
+                match = false
+                break
+            }
+        }
+        when match => return true
+    }
+    return false
+}
+
+# ============================================================================
+# ERROR HANDLER MIDDLEWARE
+# ============================================================================
+
+fun error_handler_middleware(req: HttpRequest) -> HttpResponse {
+    # This is actually called from server catch block
+    return null
+}
+
+# ============================================================================
+# RATE LIMITING (Simple in-memory)
+# ============================================================================
+
+var rate_limit_store = {}
+
+fun rate_limiter(max_requests: number, window_ms: number) -> fun {
+    return fun(req: HttpRequest) -> HttpResponse {
+        var client_ip = req.get_header("X-Forwarded-For")
+        when client_ip == "" => client_ip = "unknown"
+        
+        var now_time = native_time_ms()
+        
+        when not (client_ip in rate_limit_store) => {
+            rate_limit_store[client_ip] = {
+                "count": 0,
+                "window_start": now_time
+            }
+        }
+        
+        var client_data = rate_limit_store[client_ip]
+        
+        # Reset window if expired
+        when now_time - client_data["window_start"] > window_ms => {
+            client_data["count"] = 0
+            client_data["window_start"] = now_time
+        }
+        
+        # Check limit
+        when client_data["count"] >= max_requests => {
+            return error_response(429, "Too Many Requests")
+        }
+        
+        client_data["count"] = client_data["count"] + 1
+        rate_limit_store[client_ip] = client_data
+        
+        return null  # Continue
+    }
+}
+
+# ============================================================================
+# EXPORTS
+# ============================================================================
+
+export {
+    logger_middleware,
+    cors_middleware,
+    json_content_type_middleware,
+    error_handler_middleware,
+    rate_limiter
+}

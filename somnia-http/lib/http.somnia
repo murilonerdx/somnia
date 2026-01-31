@@ -1,0 +1,434 @@
+# ============================================================================
+# Somnia HTTP Library
+# Pure Somnia HTTP Client and Server
+# ============================================================================
+
+# ============================================================================
+# HTTP REQUEST / RESPONSE MODELS
+# ============================================================================
+
+class HttpMethod {
+    field value: string
+}
+
+const GET = HttpMethod { value: "GET" }
+const POST = HttpMethod { value: "POST" }
+const PUT = HttpMethod { value: "PUT" }
+const DELETE = HttpMethod { value: "DELETE" }
+const PATCH = HttpMethod { value: "PATCH" }
+const HEAD = HttpMethod { value: "HEAD" }
+const OPTIONS = HttpMethod { value: "OPTIONS" }
+
+class HttpHeader {
+    field name: string
+    field value: string
+}
+
+class HttpRequest {
+    field method: HttpMethod
+    field url: string
+    field path: string
+    field headers: list
+    field body: string
+    field query_params: map
+    field path_params: map
+    
+    method get_header(name: string) -> string {
+        for header in self.headers {
+            when header.name == name => return header.value
+        }
+        return ""
+    }
+    
+    method get_param(name: string) -> string {
+        when name in self.query_params => return self.query_params[name]
+        return ""
+    }
+    
+    method get_path_param(name: string) -> string {
+        when name in self.path_params => return self.path_params[name]
+        return ""
+    }
+}
+
+class HttpResponse {
+    field status: number
+    field status_text: string
+    field headers: list
+    field body: string
+    
+    method with_status(code: number) -> HttpResponse {
+        self.status = code
+        self.status_text = self.get_status_text(code)
+        return self
+    }
+    
+    method with_header(name: string, value: string) -> HttpResponse {
+        self.headers = self.headers + [HttpHeader { name: name, value: value }]
+        return self
+    }
+    
+    method with_body(content: string) -> HttpResponse {
+        self.body = content
+        return self
+    }
+    
+    method with_json(data: any) -> HttpResponse {
+        self.headers = self.headers + [HttpHeader { name: "Content-Type", value: "application/json" }]
+        self.body = native_to_json(data)
+        return self
+    }
+    
+    method get_status_text(code: number) -> string {
+        when code == 200 => return "OK"
+        when code == 201 => return "Created"
+        when code == 204 => return "No Content"
+        when code == 400 => return "Bad Request"
+        when code == 401 => return "Unauthorized"
+        when code == 403 => return "Forbidden"
+        when code == 404 => return "Not Found"
+        when code == 405 => return "Method Not Allowed"
+        when code == 500 => return "Internal Server Error"
+        return "Unknown"
+    }
+}
+
+fun response() -> HttpResponse {
+    return HttpResponse {
+        status: 200,
+        status_text: "OK",
+        headers: [],
+        body: ""
+    }
+}
+
+fun json_response(data: any) -> HttpResponse {
+    return response().with_json(data)
+}
+
+fun error_response(code: number, message: string) -> HttpResponse {
+    return response()
+        .with_status(code)
+        .with_json({ "error": message, "status": code })
+}
+
+# ============================================================================
+# HTTP CLIENT
+# ============================================================================
+
+class HttpClient {
+    field base_url: string
+    field default_headers: list
+    field timeout: number
+    
+    method request(method: HttpMethod, path: string, options: map) -> HttpResponse {
+        var url = self.base_url + path
+        var headers = self.default_headers
+        var body = ""
+        
+        when "headers" in options => {
+            for h in options["headers"] {
+                headers = headers + [h]
+            }
+        }
+        
+        when "body" in options => body = options["body"]
+        when "json" in options => {
+            body = native_to_json(options["json"])
+            headers = headers + [HttpHeader { name: "Content-Type", value: "application/json" }]
+        }
+        
+        # Native HTTP call
+        var result = native_http_request(method.value, url, headers, body, self.timeout)
+        
+        return HttpResponse {
+            status: result["status"],
+            status_text: result["status_text"],
+            headers: result["headers"],
+            body: result["body"]
+        }
+    }
+    
+    method get(path: string) -> HttpResponse {
+        return self.request(GET, path, {})
+    }
+    
+    method get_with(path: string, options: map) -> HttpResponse {
+        return self.request(GET, path, options)
+    }
+    
+    method post(path: string, data: any) -> HttpResponse {
+        return self.request(POST, path, { "json": data })
+    }
+    
+    method put(path: string, data: any) -> HttpResponse {
+        return self.request(PUT, path, { "json": data })
+    }
+    
+    method patch(path: string, data: any) -> HttpResponse {
+        return self.request(PATCH, path, { "json": data })
+    }
+    
+    method delete(path: string) -> HttpResponse {
+        return self.request(DELETE, path, {})
+    }
+}
+
+fun create_client(base_url: string) -> HttpClient {
+    return HttpClient {
+        base_url: base_url,
+        default_headers: [
+            HttpHeader { name: "Accept", value: "application/json" },
+            HttpHeader { name: "User-Agent", value: "Somnia-HTTP/1.0" }
+        ],
+        timeout: 30000
+    }
+}
+
+# ============================================================================
+# HTTP SERVER
+# ============================================================================
+
+class Route {
+    field method: HttpMethod
+    field pattern: string
+    field handler: fun
+    field param_names: list
+    
+    method matches(req_method: HttpMethod, path: string) -> map {
+        when self.method.value != req_method.value => return { "match": false }
+        
+        var parts = string_split(self.pattern, "/")
+        var path_parts = string_split(path, "/")
+        
+        when len(parts) != len(path_parts) => return { "match": false }
+        
+        var params = {}
+        
+        for i in range(0, len(parts)) {
+            var part = parts[i]
+            var path_part = path_parts[i]
+            
+            when string_starts_with(part, ":") => {
+                var param_name = string_substring(part, 1, len(part))
+                params[param_name] = path_part
+            }
+            when part != path_part => return { "match": false }
+        }
+        
+        return { "match": true, "params": params }
+    }
+}
+
+class Router {
+    field routes: list
+    field prefix: string
+    field middleware: list
+    
+    method get(pattern: string, handler: fun) -> Router {
+        self.add_route(GET, pattern, handler)
+        return self
+    }
+    
+    method post(pattern: string, handler: fun) -> Router {
+        self.add_route(POST, pattern, handler)
+        return self
+    }
+    
+    method put(pattern: string, handler: fun) -> Router {
+        self.add_route(PUT, pattern, handler)
+        return self
+    }
+    
+    method delete(pattern: string, handler: fun) -> Router {
+        self.add_route(DELETE, pattern, handler)
+        return self
+    }
+    
+    method patch(pattern: string, handler: fun) -> Router {
+        self.add_route(PATCH, pattern, handler)
+        return self
+    }
+    
+    method add_route(method: HttpMethod, pattern: string, handler: fun) {
+        var full_pattern = self.prefix + pattern
+        var param_names = self.extract_params(pattern)
+        
+        self.routes = self.routes + [Route {
+            method: method,
+            pattern: full_pattern,
+            handler: handler,
+            param_names: param_names
+        }]
+    }
+    
+    method use(middleware_fn: fun) -> Router {
+        self.middleware = self.middleware + [middleware_fn]
+        return self
+    }
+    
+    method group(prefix: string) -> Router {
+        return Router {
+            routes: self.routes,
+            prefix: self.prefix + prefix,
+            middleware: self.middleware
+        }
+    }
+    
+    method extract_params(pattern: string) -> list {
+        var params = []
+        var parts = string_split(pattern, "/")
+        
+        for part in parts {
+            when string_starts_with(part, ":") => {
+                params = params + [string_substring(part, 1, len(part))]
+            }
+        }
+        
+        return params
+    }
+    
+    method find_route(method: HttpMethod, path: string) -> map {
+        for route in self.routes {
+            var result = route.matches(method, path)
+            when result["match"] => {
+                return {
+                    "found": true,
+                    "route": route,
+                    "params": result["params"]
+                }
+            }
+        }
+        return { "found": false }
+    }
+}
+
+class HttpServer {
+    field router: Router
+    field port: number
+    field host: string
+    field running: bool
+    
+    method get(pattern: string, handler: fun) -> HttpServer {
+        self.router.get(pattern, handler)
+        return self
+    }
+    
+    method post(pattern: string, handler: fun) -> HttpServer {
+        self.router.post(pattern, handler)
+        return self
+    }
+    
+    method put(pattern: string, handler: fun) -> HttpServer {
+        self.router.put(pattern, handler)
+        return self
+    }
+    
+    method delete(pattern: string, handler: fun) -> HttpServer {
+        self.router.delete(pattern, handler)
+        return self
+    }
+    
+    method patch(pattern: string, handler: fun) -> HttpServer {
+        self.router.patch(pattern, handler)
+        return self
+    }
+    
+    method use(middleware: fun) -> HttpServer {
+        self.router.use(middleware)
+        return self
+    }
+    
+    method group(prefix: string) -> Router {
+        return self.router.group(prefix)
+    }
+    
+    method handle_request(req: HttpRequest) -> HttpResponse {
+        # Run middleware
+        for mw in self.router.middleware {
+            var result = mw(req)
+            when result != null => return result
+        }
+        
+        # Find matching route
+        var method = HttpMethod { value: req.method.value }
+        var route_result = self.router.find_route(method, req.path)
+        
+        when not route_result["found"] => {
+            return error_response(404, "Not Found: " + req.path)
+        }
+        
+        # Add path params to request
+        req.path_params = route_result["params"]
+        
+        # Call handler
+        try {
+            return route_result["route"].handler(req)
+        } catch e {
+            println("[ERROR] " + e)
+            return error_response(500, "Internal Server Error")
+        }
+    }
+    
+    method listen(port: number) {
+        self.port = port
+        self.running = true
+        println("[Somnia HTTP] Server starting on port " + native_to_string(port))
+        
+        # Native server binding
+        native_http_server_start(port, fun(raw_request: map) -> map {
+            var req = self.parse_request(raw_request)
+            var res = self.handle_request(req)
+            
+            return {
+                "status": res.status,
+                "headers": res.headers,
+                "body": res.body
+            }
+        })
+    }
+    
+    method parse_request(raw: map) -> HttpRequest {
+        var headers = []
+        when "headers" in raw => {
+            for h in raw["headers"] {
+                headers = headers + [HttpHeader { name: h["name"], value: h["value"] }]
+            }
+        }
+        
+        return HttpRequest {
+            method: HttpMethod { value: raw["method"] },
+            url: raw["url"],
+            path: raw["path"],
+            headers: headers,
+            body: raw["body"],
+            query_params: raw["query"],
+            path_params: {}
+        }
+    }
+}
+
+fun create_server() -> HttpServer {
+    return HttpServer {
+        router: Router {
+            routes: [],
+            prefix: "",
+            middleware: []
+        },
+        port: 8080,
+        host: "0.0.0.0",
+        running: false
+    }
+}
+
+# ============================================================================
+# EXPORTS
+# ============================================================================
+
+export {
+    HttpMethod, GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS,
+    HttpHeader, HttpRequest, HttpResponse,
+    HttpClient, create_client,
+    Route, Router, HttpServer, create_server,
+    response, json_response, error_response
+}

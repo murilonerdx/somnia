@@ -1,0 +1,251 @@
+# ============================================================================
+# Somnia Standard Library - Validation
+# Input validation and schema validation
+# ============================================================================
+
+# ============================================================================
+# VALIDATION RESULT
+# ============================================================================
+
+class ValidationResult {
+    field valid: bool
+    field errors: list
+    
+    method is_valid() -> bool {
+        return self.valid
+    }
+    
+    method add_error(field: string, message: string) {
+        self.valid = false
+        self.errors = self.errors + [{ "field": field, "message": message }]
+    }
+    
+    method merge(other: ValidationResult) -> ValidationResult {
+        return ValidationResult {
+            valid: self.valid and other.valid,
+            errors: self.errors + other.errors
+        }
+    }
+}
+
+fun valid() -> ValidationResult {
+    return ValidationResult { valid: true, errors: [] }
+}
+
+fun invalid(field: string, message: string) -> ValidationResult {
+    return ValidationResult { 
+        valid: false, 
+        errors: [{ "field": field, "message": message }]
+    }
+}
+
+# ============================================================================
+# VALIDATORS
+# ============================================================================
+
+fun required(value: any, field: string) -> ValidationResult {
+    when value == null or value == "" => {
+        return invalid(field, "is required")
+    }
+    return valid()
+}
+
+fun min_length(value: string, min: number, field: string) -> ValidationResult {
+    when len(value) < min => {
+        return invalid(field, "must be at least " + native_to_string(min) + " characters")
+    }
+    return valid()
+}
+
+fun max_length(value: string, max: number, field: string) -> ValidationResult {
+    when len(value) > max => {
+        return invalid(field, "must be at most " + native_to_string(max) + " characters")
+    }
+    return valid()
+}
+
+fun min_value(value: number, min: number, field: string) -> ValidationResult {
+    when value < min => {
+        return invalid(field, "must be at least " + native_to_string(min))
+    }
+    return valid()
+}
+
+fun max_value(value: number, max: number, field: string) -> ValidationResult {
+    when value > max => {
+        return invalid(field, "must be at most " + native_to_string(max))
+    }
+    return valid()
+}
+
+fun is_email(value: string, field: string) -> ValidationResult {
+    when not contains_char(value, "@") or not contains_char(value, ".") => {
+        return invalid(field, "must be a valid email address")
+    }
+    return valid()
+}
+
+fun is_url(value: string, field: string) -> ValidationResult {
+    when not string_starts_with(value, "http://") and not string_starts_with(value, "https://") => {
+        return invalid(field, "must be a valid URL")
+    }
+    return valid()
+}
+
+fun is_numeric(value: string, field: string) -> ValidationResult {
+    for i in range(0, len(value)) {
+        var c = string_substring(value, i, i + 1)
+        when not (c >= "0" and c <= "9") and c != "." and c != "-" => {
+            return invalid(field, "must be numeric")
+        }
+    }
+    return valid()
+}
+
+fun matches_pattern(value: string, pattern: string, field: string) -> ValidationResult {
+    # Simple pattern matching (not full regex)
+    when not native_matches(value, pattern) => {
+        return invalid(field, "does not match required pattern")
+    }
+    return valid()
+}
+
+fun one_of(value: any, allowed: list, field: string) -> ValidationResult {
+    for item in allowed {
+        when item == value => return valid()
+    }
+    return invalid(field, "must be one of: " + native_to_string(allowed))
+}
+
+fun contains_char(str: string, char: string) -> bool {
+    for i in range(0, len(str)) {
+        when string_substring(str, i, i + 1) == char => return true
+    }
+    return false
+}
+
+# ============================================================================
+# SCHEMA VALIDATOR
+# ============================================================================
+
+class SchemaField {
+    field name: string
+    field type: string
+    field required: bool
+    field validators: list
+}
+
+class Schema {
+    field fields: list
+    
+    method field(name: string, type: string) -> SchemaBuilder {
+        return SchemaBuilder {
+            schema: self,
+            current_field: SchemaField {
+                name: name,
+                type: type,
+                required: false,
+                validators: []
+            }
+        }
+    }
+    
+    method validate(data: map) -> ValidationResult {
+        var result = valid()
+        
+        for field in self.fields {
+            var value = null
+            when field.name in data => value = data[field.name]
+            
+            # Check required
+            when field.required and (value == null or value == "") => {
+                result = result.merge(invalid(field.name, "is required"))
+                continue
+            }
+            
+            # Check type
+            when value != null => {
+                var actual_type = native_type(value)
+                when actual_type != field.type and field.type != "any" => {
+                    result = result.merge(invalid(field.name, "must be of type " + field.type))
+                }
+            }
+            
+            # Run validators
+            for validator in field.validators {
+                var v_result = validator(value, field.name)
+                result = result.merge(v_result)
+            }
+        }
+        
+        return result
+    }
+}
+
+class SchemaBuilder {
+    field schema: Schema
+    field current_field: SchemaField
+    
+    method required() -> SchemaBuilder {
+        self.current_field.required = true
+        return self
+    }
+    
+    method min(value: number) -> SchemaBuilder {
+        when self.current_field.type == "string" => {
+            self.current_field.validators = self.current_field.validators + [
+                fun(v: any, f: string) -> ValidationResult { return min_length(v, value, f) }
+            ]
+        }
+        when self.current_field.type == "number" => {
+            self.current_field.validators = self.current_field.validators + [
+                fun(v: any, f: string) -> ValidationResult { return min_value(v, value, f) }
+            ]
+        }
+        return self
+    }
+    
+    method max(value: number) -> SchemaBuilder {
+        when self.current_field.type == "string" => {
+            self.current_field.validators = self.current_field.validators + [
+                fun(v: any, f: string) -> ValidationResult { return max_length(v, value, f) }
+            ]
+        }
+        when self.current_field.type == "number" => {
+            self.current_field.validators = self.current_field.validators + [
+                fun(v: any, f: string) -> ValidationResult { return max_value(v, value, f) }
+            ]
+        }
+        return self
+    }
+    
+    method email() -> SchemaBuilder {
+        self.current_field.validators = self.current_field.validators + [is_email]
+        return self
+    }
+    
+    method url() -> SchemaBuilder {
+        self.current_field.validators = self.current_field.validators + [is_url]
+        return self
+    }
+    
+    method add() -> Schema {
+        self.schema.fields = self.schema.fields + [self.current_field]
+        return self.schema
+    }
+}
+
+fun schema() -> Schema {
+    return Schema { fields: [] }
+}
+
+# ============================================================================
+# EXPORTS
+# ============================================================================
+
+export {
+    ValidationResult, valid, invalid,
+    required, min_length, max_length, min_value, max_value,
+    is_email, is_url, is_numeric, matches_pattern, one_of,
+    Schema, SchemaField, SchemaBuilder, schema
+}

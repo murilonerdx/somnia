@@ -1,0 +1,196 @@
+# ============================================================================
+# Somnia REST API - User Controller
+# HTTP handlers for user endpoints
+# ============================================================================
+
+import { HttpRequest, HttpResponse, json_response, error_response } from "../../somnia-http/lib/http"
+import { get_db } from "../database"
+import { User, user_from_map, user_create_schema, user_update_schema } from "../models/user"
+import { uuid } from "../../somnia-stdlib/lib/utils"
+import { map_list } from "../../somnia-stdlib/lib/collections"
+import { json_parse } from "../../somnia-json/lib/json"
+
+# ============================================================================
+# USER CONTROLLER
+# ============================================================================
+
+class UserController {
+    field collection_name: string = "users"
+    
+    # GET /api/users - List all users
+    method list(req: HttpRequest) -> HttpResponse {
+        var db = get_db()
+        var users_col = db.collection(self.collection_name)
+        var users = users_col.find_all()
+        
+        var safe_users = map_list(users, fun(u: map) -> map {
+            return {
+                "id": u["id"],
+                "name": u["name"],
+                "email": u["email"],
+                "role": u["role"],
+                "active": u["active"]
+            }
+        })
+        
+        return json_response({
+            "success": true,
+            "data": safe_users,
+            "count": len(safe_users)
+        })
+    }
+    
+    # GET /api/users/:id - Get user by ID
+    method get_by_id(req: HttpRequest) -> HttpResponse {
+        var id = req.get_path_param("id")
+        
+        var db = get_db()
+        var users_col = db.collection(self.collection_name)
+        var user = users_col.find_by_id(id)
+        
+        when user == null => {
+            return error_response(404, "User not found")
+        }
+        
+        return json_response({
+            "success": true,
+            "data": {
+                "id": user["id"],
+                "name": user["name"],
+                "email": user["email"],
+                "role": user["role"],
+                "active": user["active"]
+            }
+        })
+    }
+    
+    # POST /api/users - Create user
+    method create(req: HttpRequest) -> HttpResponse {
+        var body = json_parse(req.body)
+        var data = native_from_json_value(body)
+        
+        # Validate
+        var validation = user_create_schema().validate(data)
+        when not validation.is_valid() => {
+            return json_response({
+                "success": false,
+                "errors": validation.errors
+            }).with_status(400)
+        }
+        
+        # Check email uniqueness
+        var db = get_db()
+        var users_col = db.collection(self.collection_name)
+        var existing = users_col.find_one({ "email": data["email"] })
+        
+        when existing != null => {
+            return error_response(409, "Email already exists")
+        }
+        
+        # Create user
+        var user_data = {
+            "id": uuid(),
+            "name": data["name"],
+            "email": data["email"],
+            "password": native_hash(data["password"]),
+            "role": data["role"],
+            "active": true
+        }
+        
+        when not ("role" in data) or data["role"] == null => {
+            user_data["role"] = "user"
+        }
+        
+        var created = users_col.insert(user_data)
+        
+        return json_response({
+            "success": true,
+            "message": "User created successfully",
+            "data": {
+                "id": created["id"],
+                "name": created["name"],
+                "email": created["email"],
+                "role": created["role"],
+                "active": created["active"]
+            }
+        }).with_status(201)
+    }
+    
+    # PUT /api/users/:id - Update user
+    method update(req: HttpRequest) -> HttpResponse {
+        var id = req.get_path_param("id")
+        var body = json_parse(req.body)
+        var data = native_from_json_value(body)
+        
+        var db = get_db()
+        var users_col = db.collection(self.collection_name)
+        
+        # Check if exists
+        var existing = users_col.find_by_id(id)
+        when existing == null => {
+            return error_response(404, "User not found")
+        }
+        
+        # Validate
+        var validation = user_update_schema().validate(data)
+        when not validation.is_valid() => {
+            return json_response({
+                "success": false,
+                "errors": validation.errors
+            }).with_status(400)
+        }
+        
+        # Update
+        var updates = {}
+        when "name" in data and data["name"] != null => updates["name"] = data["name"]
+        when "email" in data and data["email"] != null => updates["email"] = data["email"]
+        when "role" in data and data["role"] != null => updates["role"] = data["role"]
+        when "active" in data => updates["active"] = data["active"]
+        
+        var updated = users_col.update_by_id(id, updates)
+        
+        return json_response({
+            "success": true,
+            "message": "User updated successfully",
+            "data": {
+                "id": updated["id"],
+                "name": updated["name"],
+                "email": updated["email"],
+                "role": updated["role"],
+                "active": updated["active"]
+            }
+        })
+    }
+    
+    # DELETE /api/users/:id - Delete user
+    method delete(req: HttpRequest) -> HttpResponse {
+        var id = req.get_path_param("id")
+        
+        var db = get_db()
+        var users_col = db.collection(self.collection_name)
+        
+        var deleted = users_col.delete_by_id(id)
+        
+        when not deleted => {
+            return error_response(404, "User not found")
+        }
+        
+        return json_response({
+            "success": true,
+            "message": "User deleted successfully"
+        })
+    }
+}
+
+# Singleton instance
+var user_controller = UserController {}
+
+fun get_user_controller() -> UserController {
+    return user_controller
+}
+
+# ============================================================================
+# EXPORTS
+# ============================================================================
+
+export { UserController, get_user_controller }

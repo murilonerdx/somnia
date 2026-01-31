@@ -1,0 +1,38 @@
+# ============================================================================
+# Somnia JSON Extension - Entry Point
+# ============================================================================
+
+import { 
+    JsonValue,
+    JsonParser,
+    JsonSerializer,
+    json_string,
+    json_number,
+    json_bool,
+    json_null,
+    json_array,
+    json_object,
+    json_parse,
+    json_stringify,
+    json_stringify_pretty,
+    to_json,
+    from_json
+} from "./json"
+
+# Re-export everything
+export {
+    JsonValue,
+    JsonParser,
+    JsonSerializer,
+    json_string,
+    json_number,
+    json_bool,
+    json_null,
+    json_array,
+    json_object,
+    json_parse,
+    json_stringify,
+    json_stringify_pretty,
+    to_json,
+    from_json
+}

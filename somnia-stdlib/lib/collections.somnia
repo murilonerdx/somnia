@@ -1,0 +1,215 @@
+# ============================================================================
+# Somnia Standard Library - Collections
+# Advanced collection utilities
+# ============================================================================
+
+# ============================================================================
+# LIST UTILITIES
+# ============================================================================
+
+fun map_list(items: list, fn: fun) -> list {
+    var result = []
+    for item in items {
+        result = result + [fn(item)]
+    }
+    return result
+}
+
+fun filter_list(items: list, predicate: fun) -> list {
+    var result = []
+    for item in items {
+        when predicate(item) => result = result + [item]
+    }
+    return result
+}
+
+fun reduce_list(items: list, initial: any, fn: fun) -> any {
+    var acc = initial
+    for item in items {
+        acc = fn(acc, item)
+    }
+    return acc
+}
+
+fun find_in_list(items: list, predicate: fun) -> any {
+    for item in items {
+        when predicate(item) => return item
+    }
+    return null
+}
+
+fun find_index(items: list, predicate: fun) -> number {
+    for i in range(0, len(items)) {
+        when predicate(items[i]) => return i
+    }
+    return -1
+}
+
+fun every(items: list, predicate: fun) -> bool {
+    for item in items {
+        when not predicate(item) => return false
+    }
+    return true
+}
+
+fun some(items: list, predicate: fun) -> bool {
+    for item in items {
+        when predicate(item) => return true
+    }
+    return false
+}
+
+fun reverse_list(items: list) -> list {
+    var result = []
+    for i in range(len(items) - 1, -1, -1) {
+        result = result + [items[i]]
+    }
+    return result
+}
+
+fun slice_list(items: list, start: number, end: number) -> list {
+    var result = []
+    for i in range(start, min(end, len(items))) {
+        result = result + [items[i]]
+    }
+    return result
+}
+
+fun flatten(items: list) -> list {
+    var result = []
+    for item in items {
+        when native_type(item) == "list" => {
+            for sub in item {
+                result = result + [sub]
+            }
+        }
+        default => result = result + [item]
+    }
+    return result
+}
+
+fun unique(items: list) -> list {
+    var seen = {}
+    var result = []
+    for item in items {
+        var key = native_to_string(item)
+        when not (key in seen) => {
+            seen[key] = true
+            result = result + [item]
+        }
+    }
+    return result
+}
+
+fun group_by(items: list, key_fn: fun) -> map {
+    var groups = {}
+    for item in items {
+        var key = key_fn(item)
+        when not (key in groups) => groups[key] = []
+        groups[key] = groups[key] + [item]
+    }
+    return groups
+}
+
+fun sort_by(items: list, key_fn: fun) -> list {
+    return native_sort(items, fun(a: any, b: any) -> number {
+        var ka = key_fn(a)
+        var kb = key_fn(b)
+        return native_compare(ka, kb)
+    })
+}
+
+fun take(items: list, n: number) -> list {
+    return slice_list(items, 0, n)
+}
+
+fun drop(items: list, n: number) -> list {
+    return slice_list(items, n, len(items))
+}
+
+fun zip(list1: list, list2: list) -> list {
+    var result = []
+    var length = min(len(list1), len(list2))
+    for i in range(0, length) {
+        result = result + [[list1[i], list2[i]]]
+    }
+    return result
+}
+
+# ============================================================================
+# MAP UTILITIES
+# ============================================================================
+
+fun map_values(m: map, fn: fun) -> map {
+    var result = {}
+    for key in native_keys(m) {
+        result[key] = fn(m[key])
+    }
+    return result
+}
+
+fun filter_map(m: map, predicate: fun) -> map {
+    var result = {}
+    for key in native_keys(m) {
+        when predicate(key, m[key]) => result[key] = m[key]
+    }
+    return result
+}
+
+fun merge_maps(m1: map, m2: map) -> map {
+    var result = {}
+    for key in native_keys(m1) {
+        result[key] = m1[key]
+    }
+    for key in native_keys(m2) {
+        result[key] = m2[key]
+    }
+    return result
+}
+
+fun pick(m: map, keys: list) -> map {
+    var result = {}
+    for key in keys {
+        when key in m => result[key] = m[key]
+    }
+    return result
+}
+
+fun omit(m: map, keys: list) -> map {
+    var result = {}
+    var omit_set = {}
+    for k in keys {
+        omit_set[k] = true
+    }
+    for key in native_keys(m) {
+        when not (key in omit_set) => result[key] = m[key]
+    }
+    return result
+}
+
+fun entries(m: map) -> list {
+    var result = []
+    for key in native_keys(m) {
+        result = result + [{ "key": key, "value": m[key] }]
+    }
+    return result
+}
+
+fun from_entries(entries_list: list) -> map {
+    var result = {}
+    for entry in entries_list {
+        result[entry["key"]] = entry["value"]
+    }
+    return result
+}
+
+# ============================================================================
+# EXPORTS
+# ============================================================================
+
+export {
+    map_list, filter_list, reduce_list, find_in_list, find_index,
+    every, some, reverse_list, slice_list, flatten, unique,
+    group_by, sort_by, take, drop, zip,
+    map_values, filter_map, merge_maps, pick, omit, entries, from_entries
+}

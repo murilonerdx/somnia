@@ -1,0 +1,91 @@
+# ============================================================================
+# Somnia REST API - Main Entry Point
+# A complete REST API built purely in Somnia
+# ============================================================================
+
+import { create_server } from "../somnia-http/lib/http"
+import { setup_routes } from "./routes"
+import { get_db } from "./database"
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+const PORT = 8080
+const HOST = "0.0.0.0"
+
+# ============================================================================
+# SEED DATA
+# ============================================================================
+
+fun seed_database() {
+    var db = get_db()
+    var users = db.collection("users")
+    
+    println("[Somnia API] Seeding database...")
+    
+    # Create sample users
+    users.insert({
+        "name": "Admin User",
+        "email": "admin@somnia.dev",
+        "password": native_hash("admin123"),
+        "role": "admin",
+        "active": true
+    })
+    
+    users.insert({
+        "name": "John Doe",
+        "email": "john@example.com",
+        "password": native_hash("password123"),
+        "role": "user",
+        "active": true
+    })
+    
+    users.insert({
+        "name": "Jane Smith",
+        "email": "jane@example.com",
+        "password": native_hash("password456"),
+        "role": "user",
+        "active": true
+    })
+    
+    println("[Somnia API] Database seeded with " + native_to_string(users.count()) + " users")
+}
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+fun main() {
+    println("")
+    println("╔════════════════════════════════════════════════════════╗")
+    println("║           SOMNIA REST API v1.0.0                       ║")
+    println("║   A complete REST API built purely in Somnia           ║")
+    println("╚════════════════════════════════════════════════════════╝")
+    println("")
+    
+    # Seed database
+    seed_database()
+    
+    # Create and configure server
+    var server = create_server()
+    server = setup_routes(server)
+    
+    println("")
+    println("[Somnia API] Available endpoints:")
+    println("  GET    /api          - API info")
+    println("  GET    /api/health   - Health check")
+    println("  GET    /api/users    - List users")
+    println("  GET    /api/users/:id - Get user")
+    println("  POST   /api/users    - Create user")
+    println("  PUT    /api/users/:id - Update user")
+    println("  DELETE /api/users/:id - Delete user")
+    println("")
+    
+    # Start server
+    println("[Somnia API] Starting server on http://" + HOST + ":" + native_to_string(PORT))
+    server.listen(PORT)
+}
+
+# Run the application
+main()

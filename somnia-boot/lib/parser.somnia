@@ -1,0 +1,69 @@
+/*
+ * Somnia Boot - HTTP Parser
+ */
+
+import "lib/http"
+
+fun parse_http_request(raw_data) {
+    if (len(raw_data) == 0) { return null }
+    
+    var lines = split(raw_data, "\n")
+    if (len(lines) == 0) { return null }
+    
+    # Request Line: GET /path HTTP/1.1
+    var first_line = lines[0]
+    # Trim whitespace including carriage return (HTTP uses CRLF)
+    first_line = trim(first_line)
+    var parts = split(first_line, " ")
+    if (len(parts) < 2) { return null }
+    
+    var verb = parts[0]
+    var full_path = parts[1]
+    
+    # Simple Request object instantiation
+    var req = Request {}
+    req.verb = verb
+    req.path = full_path
+    req.headers = {}
+    req.params = {}
+    req.body = ""
+    
+    # Parse query params if any
+    var path_parts = split(full_path, "?")
+    if (len(path_parts) > 1) {
+        req.path = path_parts[0]
+        var query = path_parts[1]
+        var pairs = split(query, "&")
+        var j = 0
+        while (j < len(pairs)) {
+            var pair = pairs[j]
+            var kv = split(pair, "=")
+            if (len(kv) == 2) {
+                req.params[kv[0]] = kv[1]
+            }
+            j = j + 1
+        }
+    }
+    
+    # Parse body (everything after empty line)
+    var body = ""
+    var i = 1
+    var found_empty = false
+    while (i < len(lines)) {
+        var trimmed = trim(lines[i])
+        if (found_empty) {
+            if (body == "") { body = lines[i] }
+            else { body = body + "\n" + lines[i] }
+        } else {
+            if (trimmed == "") {
+                found_empty = true
+            }
+        }
+        i = i + 1
+    }
+    req.body = trim(body) # Trim body to remove trailing \r or \n
+    
+    return req
+}
+
+// End of Parser module

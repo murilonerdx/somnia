@@ -1,0 +1,147 @@
+# ============================================================================
+# Somnia REST API - Database Layer
+# In-memory database simulation
+# ============================================================================
+
+import { uuid } from "../../somnia-stdlib/lib/utils"
+import { filter_list, find_in_list, map_list } from "../../somnia-stdlib/lib/collections"
+
+# ============================================================================
+# DATABASE
+# ============================================================================
+
+class Database {
+    field collections: map
+    
+    method collection(name: string) -> Collection {
+        when not (name in self.collections) => {
+            self.collections[name] = Collection {
+                name: name,
+                documents: [],
+                indexes: {}
+            }
+        }
+        return self.collections[name]
+    }
+}
+
+class Collection {
+    field name: string
+    field documents: list
+    field indexes: map
+    
+    # Insert a document
+    method insert(doc: map) -> map {
+        when not ("id" in doc) => {
+            doc["id"] = uuid()
+        }
+        doc["created_at"] = native_time_ms()
+        doc["updated_at"] = native_time_ms()
+        
+        self.documents = self.documents + [doc]
+        self.update_indexes(doc)
+        
+        return doc
+    }
+    
+    # Find all documents
+    method find_all() -> list {
+        return self.documents
+    }
+    
+    # Find by ID
+    method find_by_id(id: string) -> map {
+        for doc in self.documents {
+            when doc["id"] == id => return doc
+        }
+        return null
+    }
+    
+    # Find with filter
+    method find(query: map) -> list {
+        return filter_list(self.documents, fun(doc: map) -> bool {
+            for key in native_keys(query) {
+                when not (key in doc) => return false
+                when doc[key] != query[key] => return false
+            }
+            return true
+        })
+    }
+    
+    # Find one
+    method find_one(query: map) -> map {
+        var results = self.find(query)
+        when len(results) > 0 => return results[0]
+        return null
+    }
+    
+    # Update by ID
+    method update_by_id(id: string, updates: map) -> map {
+        for i in range(0, len(self.documents)) {
+            when self.documents[i]["id"] == id => {
+                for key in native_keys(updates) {
+                    self.documents[i][key] = updates[key]
+                }
+                self.documents[i]["updated_at"] = native_time_ms()
+                return self.documents[i]
+            }
+        }
+        return null
+    }
+    
+    # Delete by ID
+    method delete_by_id(id: string) -> bool {
+        var new_docs = []
+        var found = false
+        
+        for doc in self.documents {
+            when doc["id"] == id => {
+                found = true
+            }
+            default => {
+                new_docs = new_docs + [doc]
+            }
+        }
+        
+        self.documents = new_docs
+        return found
+    }
+    
+    # Count documents
+    method count() -> number {
+        return len(self.documents)
+    }
+    
+    # Create index
+    method create_index(field: string) {
+        self.indexes[field] = {}
+        for doc in self.documents {
+            when field in doc => {
+                var key = native_to_string(doc[field])
+                self.indexes[field][key] = doc
+            }
+        }
+    }
+    
+    method update_indexes(doc: map) {
+        for field in native_keys(self.indexes) {
+            when field in doc => {
+                var key = native_to_string(doc[field])
+                self.indexes[field][key] = doc
+            }
+        }
+    }
+}
+
+# Global database instance
+var db = Database { collections: {} }
+
+fun get_db() -> Database {
+    return db
+}
+
+# ============================================================================
+# EXPORTS
+# ============================================================================
+
+export { Database, Collection, get_db }

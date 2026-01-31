@@ -1,0 +1,53 @@
+/*
+ * Somnia Boot - HTTP Models
+ */
+
+class Request {
+    field verb
+    field path
+    field headers
+    field body
+    field params
+}
+
+class Response {
+    field status
+    field status_text
+    field headers
+    field body
+    
+    fun json(data) {
+        self.headers["Content-Type"] = "application/json"
+        self.body = native_to_string(data)
+        return self
+    }
+    
+    fun html(content) {
+        self.headers["Content-Type"] = "text/html"
+        self.body = content
+        return self
+    }
+    
+    fun send(client_fd) {
+        var text = this.status_text
+        if (text == null) { text = "OK" }
+        var response_str = "HTTP/1.1 " + this.status + " " + text + "\r\n"
+        
+        # Headers
+        var keys = native_keys(self.headers)
+        var k = 0
+        while (k < len(keys)) {
+            var key = keys[k]
+            response_str = response_str + key + ": " + self.headers[key] + "\r\n"
+            k = k + 1
+        }
+        
+        response_str = response_str + "Content-Length: " + native_to_string(len(self.body)) + "\r\n"
+        response_str = response_str + "Connection: close\r\n\r\n"
+        response_str = response_str + self.body
+        
+        native_net_write(client_fd, response_str)
+    }
+}
+
+// End of HTTP module

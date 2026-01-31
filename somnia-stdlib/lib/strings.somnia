@@ -1,0 +1,223 @@
+# ============================================================================
+# Somnia Standard Library - Strings
+# Advanced string manipulation
+# ============================================================================
+
+fun trim(str: string) -> string {
+    var start = 0
+    var end = len(str)
+    
+    while start < end and is_whitespace(char_at(str, start)) {
+        start = start + 1
+    }
+    
+    while end > start and is_whitespace(char_at(str, end - 1)) {
+        end = end - 1
+    }
+    
+    return string_substring(str, start, end)
+}
+
+fun trim_left(str: string) -> string {
+    var start = 0
+    while start < len(str) and is_whitespace(char_at(str, start)) {
+        start = start + 1
+    }
+    return string_substring(str, start, len(str))
+}
+
+fun trim_right(str: string) -> string {
+    var end = len(str)
+    while end > 0 and is_whitespace(char_at(str, end - 1)) {
+        end = end - 1
+    }
+    return string_substring(str, 0, end)
+}
+
+fun is_whitespace(char: string) -> bool {
+    return char == " " or char == "\t" or char == "\n" or char == "\r"
+}
+
+fun char_at(str: string, index: number) -> string {
+    when index < 0 or index >= len(str) => return ""
+    return string_substring(str, index, index + 1)
+}
+
+fun to_upper(str: string) -> string {
+    var result = ""
+    for i in range(0, len(str)) {
+        var c = char_at(str, i)
+        when c >= "a" and c <= "z" => {
+            result = result + native_from_char_code(native_char_code(c) - 32)
+        }
+        default => result = result + c
+    }
+    return result
+}
+
+fun to_lower(str: string) -> string {
+    var result = ""
+    for i in range(0, len(str)) {
+        var c = char_at(str, i)
+        when c >= "A" and c <= "Z" => {
+            result = result + native_from_char_code(native_char_code(c) + 32)
+        }
+        default => result = result + c
+    }
+    return result
+}
+
+fun capitalize(str: string) -> string {
+    when len(str) == 0 => return ""
+    return to_upper(char_at(str, 0)) + string_substring(str, 1, len(str))
+}
+
+fun title_case(str: string) -> string {
+    var words = string_split(str, " ")
+    var result = []
+    for word in words {
+        result = result + [capitalize(to_lower(word))]
+    }
+    return join(result, " ")
+}
+
+fun camel_case(str: string) -> string {
+    var words = string_split(str, "_")
+    var result = to_lower(words[0])
+    for i in range(1, len(words)) {
+        result = result + capitalize(to_lower(words[i]))
+    }
+    return result
+}
+
+fun snake_case(str: string) -> string {
+    var result = ""
+    for i in range(0, len(str)) {
+        var c = char_at(str, i)
+        when c >= "A" and c <= "Z" => {
+            when i > 0 => result = result + "_"
+            result = result + to_lower(c)
+        }
+        default => result = result + c
+    }
+    return result
+}
+
+fun kebab_case(str: string) -> string {
+    var result = ""
+    for i in range(0, len(str)) {
+        var c = char_at(str, i)
+        when c >= "A" and c <= "Z" => {
+            when i > 0 => result = result + "-"
+            result = result + to_lower(c)
+        }
+        when c == "_" => result = result + "-"
+        default => result = result + c
+    }
+    return result
+}
+
+fun join(items: list, separator: string) -> string {
+    when len(items) == 0 => return ""
+    
+    var result = native_to_string(items[0])
+    for i in range(1, len(items)) {
+        result = result + separator + native_to_string(items[i])
+    }
+    return result
+}
+
+fun repeat_string(str: string, times: number) -> string {
+    var result = ""
+    for i in range(0, times) {
+        result = result + str
+    }
+    return result
+}
+
+fun pad_left(str: string, length: number, pad_char: string) -> string {
+    when len(str) >= length => return str
+    var padding = repeat_string(pad_char, length - len(str))
+    return padding + str
+}
+
+fun pad_right(str: string, length: number, pad_char: string) -> string {
+    when len(str) >= length => return str
+    var padding = repeat_string(pad_char, length - len(str))
+    return str + padding
+}
+
+fun contains(str: string, search: string) -> bool {
+    return index_of(str, search) >= 0
+}
+
+fun index_of(str: string, search: string) -> number {
+    for i in range(0, len(str) - len(search) + 1) {
+        var match = true
+        for j in range(0, len(search)) {
+            when char_at(str, i + j) != char_at(search, j) => {
+                match = false
+                break
+            }
+        }
+        when match => return i
+    }
+    return -1
+}
+
+fun replace(str: string, search: string, replacement: string) -> string {
+    var result = ""
+    var i = 0
+    
+    while i < len(str) {
+        var found = true
+        for j in range(0, len(search)) {
+            when i + j >= len(str) or char_at(str, i + j) != char_at(search, j) => {
+                found = false
+                break
+            }
+        }
+        
+        when found => {
+            result = result + replacement
+            i = i + len(search)
+        }
+        default => {
+            result = result + char_at(str, i)
+            i = i + 1
+        }
+    }
+    
+    return result
+}
+
+fun replace_all(str: string, search: string, replacement: string) -> string {
+    var result = str
+    var prev = ""
+    while result != prev {
+        prev = result
+        result = replace(result, search, replacement)
+    }
+    return result
+}
+
+fun is_empty(str: string) -> bool {
+    return len(str) == 0
+}
+
+fun is_blank(str: string) -> bool {
+    return len(trim(str)) == 0
+}
+
+# ============================================================================
+# EXPORTS
+# ============================================================================
+
+export {
+    trim, trim_left, trim_right, is_whitespace, char_at,
+    to_upper, to_lower, capitalize, title_case,
+    camel_case, snake_case, kebab_case,
+    join, repeat_string, pad_left, pad_right,
+    contains, index_of, replace, replace_all,
+    is_empty, is_blank
+}

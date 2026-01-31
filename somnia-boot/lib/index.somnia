@@ -1,0 +1,70 @@
+/*
+ * Somnia Boot - Router and Framework Core
+ */
+
+import "lib/parser"
+import "lib/http"
+
+class SomniaBoot {
+    field routes
+    
+    fun get(path, handler) {
+        if (self.routes == null) { self.routes = {} }
+        self.routes["GET:" + path] = handler
+        println("[BOOT] Registered GET:" + path)
+    }
+    
+    fun post(path, handler) {
+        if (self.routes == null) { self.routes = {} }
+        self.routes["POST:" + path] = handler
+        println("[BOOT] Registered POST:" + path)
+    }
+    
+    fun listen(port) {
+        var server_fd = native_net_listen(port)
+        if (server_fd < 0) { return }
+        
+        println("SOMNIA BOOT v1.0.0 Online")
+        
+        while (true) {
+            var client_fd = native_net_accept(server_fd)
+            if (client_fd >= 0) {
+                self.handle_client(client_fd)
+                native_net_close(client_fd)
+            }
+        }
+    }
+    
+    fun handle_client(client_fd) {
+        var raw_request = native_net_read(client_fd)
+        var request = parse_http_request(raw_request)
+        if (request == null) { 
+            return 
+        }
+        
+        var verb = request.verb
+        if (verb == null) { verb = "GET" }
+        
+        var path = request.path
+        if (path == null) { path = "/" }
+        
+        var route_key = verb + ":" + path
+        var handler = self.routes[route_key]
+        
+        var res = Response {}
+        res.status = 200
+        res.headers = {}
+        res.body = ""
+        
+        if (handler != null) {
+            handler(request, res)
+        } else {
+            res.status = 404
+            res.json({ error: "Not Found" })
+        }
+        
+        res.send(client_fd)
+    }
+}
+
+// End of SomniaBoot module

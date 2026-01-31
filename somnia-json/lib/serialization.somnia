@@ -1,0 +1,242 @@
+# ============================================================================
+# Somnia Serialization Extension
+# Pure Somnia object serialization (inspired by Jackson)
+# ============================================================================
+
+import { json_parse, json_stringify, json_stringify_pretty, to_json, from_json, JsonValue, json_object, json_array, json_string, json_number, json_bool, json_null } from "./json"
+
+# ============================================================================
+# SERIALIZATION ANNOTATIONS (Metadata)
+# ============================================================================
+
+class SerializeField {
+    field name: string          # Field name in serialized output
+    field alias: string         # Alternative name
+    field ignore: bool          # Skip this field
+    field default_value: any    # Default value if missing
+    field required: bool        # Fail if missing
+}
+
+class SerializeConfig {
+    field include_nulls: bool         # Include null values
+    field include_defaults: bool      # Include default values
+    field snake_case: bool            # Convert camelCase to snake_case
+    field date_format: string         # Date format pattern
+    field pretty: bool                # Pretty print output
+}
+
+fun default_serialize_config() -> SerializeConfig {
+    return SerializeConfig {
+        include_nulls: false,
+        include_defaults: true,
+        snake_case: false,
+        date_format: "yyyy-MM-dd",
+        pretty: false
+    }
+}
+
+# ============================================================================
+# OBJECT MAPPER (Jackson-style)
+# ============================================================================
+
+class ObjectMapper {
+    field config: SerializeConfig
+    
+    # Serialize any value to JSON string
+    method write_value_as_string(value: any) -> string {
+        var json_val = self.to_json_value(value)
+        when self.config.pretty => return json_stringify_pretty(json_val)
+        return json_stringify(json_val)
+    }
+    
+    # Parse JSON string to native value
+    method read_value(json_str: string) -> any {
+        var json_val = json_parse(json_str)
+        return self.from_json_value(json_val)
+    }
+    
+    # Convert native value to JsonValue
+    method to_json_value(value: any) -> JsonValue {
+        var t = native_type(value)
+        
+        when t == "string" => return json_string(value)
+        when t == "number" => return json_number(value)
+        when t == "bool" => return json_bool(value)
+        when t == "null" => return json_null()
+        
+        when t == "list" => {
+            var items = []
+            for item in value {
+                items = items + [self.to_json_value(item)]
+            }
+            return json_array(items)
+        }
+        
+        when t == "map" => {
+            var entries = {}
+            for key in native_keys(value) {
+                var field_value = value[key]
+                
+                # Skip nulls if configured
+                when field_value == null and not self.config.include_nulls => continue
+                
+                # Convert key name if snake_case is enabled
+                var output_key = key
+                when self.config.snake_case => output_key = self.to_snake_case(key)
+                
+                entries[output_key] = self.to_json_value(field_value)
+            }
+            return json_object(entries)
+        }
+        
+        # Handle objects with _fields property (instances)
+        when t == "object" or t == "instance" => {
+            var entries = {}
+            var fields = native_get_fields(value)
+            
+            for key in native_keys(fields) {
+                var field_value = fields[key]
+                
+                when field_value == null and not self.config.include_nulls => continue
+                
+                var output_key = key
+                when self.config.snake_case => output_key = self.to_snake_case(key)
+                
+                entries[output_key] = self.to_json_value(field_value)
+            }
+            return json_object(entries)
+        }
+        
+        return json_null()
+    }
+    
+    # Convert JsonValue to native value
+    method from_json_value(json_val: JsonValue) -> any {
+        when json_val.type == "string" => return json_val.data
+        when json_val.type == "number" => return json_val.data
+        when json_val.type == "bool" => return json_val.data
+        when json_val.type == "null" => return null
+        
+        when json_val.type == "array" => {
+            var items = []
+            for item in json_val.data {
+                items = items + [self.from_json_value(item)]
+            }
+            return items
+        }
+        
+        when json_val.type == "object" => {
+            var result = {}
+            for key in native_keys(json_val.data) {
+                var native_key = key
+                when self.config.snake_case => native_key = self.from_snake_case(key)
+                result[native_key] = self.from_json_value(json_val.data[key])
+            }
+            return result
+        }
+        
+        return null
+    }
+    
+    # Convert camelCase to snake_case
+    method to_snake_case(str: string) -> string {
+        var result = ""
+        for i in range(0, len(str)) {
+            var char = string_substring(str, i, i + 1)
+            when self.is_upper(char) => {
+                when i > 0 => result = result + "_"
+                result = result + self.to_lower(char)
+            }
+            default => result = result + char
+        }
+        return result
+    }
+    
+    # Convert snake_case to camelCase
+    method from_snake_case(str: string) -> string {
+        var result = ""
+        var capitalize_next = false
+        
+        for i in range(0, len(str)) {
+            var char = string_substring(str, i, i + 1)
+            when char == "_" => {
+                capitalize_next = true
+            }
+            default => {
+                when capitalize_next => {
+                    result = result + self.to_upper(char)
+                    capitalize_next = false
+                }
+                default => result = result + char
+            }
+        }
+        
+        return result
+    }
+    
+    method is_upper(char: string) -> bool {
+        return char >= "A" and char <= "Z"
+    }
+    
+    method to_lower(char: string) -> string {
+        when char >= "A" and char <= "Z" => {
+            var code = native_char_code(char)
+            return native_from_char_code(code + 32)
+        }
+        return char
+    }
+    
+    method to_upper(char: string) -> string {
+        when char >= "a" and char <= "z" => {
+            var code = native_char_code(char)
+            return native_from_char_code(code - 32)
+        }
+        return char
+    }
+}
+
+# ============================================================================
+# FACTORY FUNCTIONS
+# ============================================================================
+
+fun create_object_mapper() -> ObjectMapper {
+    return ObjectMapper { config: default_serialize_config() }
+}
+
+fun create_object_mapper_with_config(config: SerializeConfig) -> ObjectMapper {
+    return ObjectMapper { config: config }
+}
+
+# Convenience functions
+fun serialize(value: any) -> string {
+    var mapper = create_object_mapper()
+    return mapper.write_value_as_string(value)
+}
+
+fun serialize_pretty(value: any) -> string {
+    var config = default_serialize_config()
+    config.pretty = true
+    var mapper = create_object_mapper_with_config(config)
+    return mapper.write_value_as_string(value)
+}
+
+fun deserialize(json_str: string) -> any {
+    var mapper = create_object_mapper()
+    return mapper.read_value(json_str)
+}
+
+# ============================================================================
+# EXPORTS
+# ============================================================================
+
+export {
+    SerializeField,
+    SerializeConfig,
+    ObjectMapper,
+    default_serialize_config,
+    create_object_mapper,
+    create_object_mapper_with_config,
+    serialize,
+    serialize_pretty,
+    deserialize
+}

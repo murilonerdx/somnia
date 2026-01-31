@@ -1,0 +1,31 @@
+/*
+ * Somnia Boot - REST API Demo
+ */
+import "lib/index"
+import "lib/parser"
+
+var app = SomniaBoot {}
+
+# Routes
+app.get("/", fun(req, res) {
+    res.html("<h1>Somnia Native API</h1><p>Running on pure C runtime!</p>")
+})
+
+app.get("/api/status", fun(req, res) {
+    res.json({
+        status: "online",
+        uptime: native_uptime(),
+        platform: "somnia-native-c"
+    })
+})
+
+app.post("/api/echo", fun(req, res) {
+    res.json({
+        received: req.body,
+        verb: req.verb,
+        headers: req.headers
+    })
+})
+
+# Start Server
+app.listen(8080)
