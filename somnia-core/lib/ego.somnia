@@ -1,0 +1,437 @@
+# ============================================================================
+# Somnia Core Library - EGO
+# Self-hosted policy layer (The Subconscious)
+# ============================================================================
+
+import "types.somnia"
+import "proposal.somnia"
+import "context.somnia"
+import "condition.somnia"
+
+# ============================================================================
+# FORBID POLICY - Block proposals by condition
+# ============================================================================
+
+class ForbidPolicy {
+    field id: string
+    field condition: Condition         # When to forbid
+    field action_pattern: string       # Optional: specific action to block
+    field reason: string               # Why forbidden
+    
+    method matches(proposal: Proposal, ctx: ExecutionContext) -> bool {
+        # Check if condition matches
+        when not self.condition.evaluate(ctx) => return false
+        
+        # Check action pattern if specified
+        when self.action_pattern != "" {
+            when not proposal.action.starts_with(self.action_pattern) {
+                return false
+            }
+        }
+        
+        return true
+    }
+}
+
+fun create_forbid_policy(id: string, condition: Condition, action_pattern: string, reason: string) -> ForbidPolicy {
+    return ForbidPolicy {
+        id: id,
+        condition: condition,
+        action_pattern: action_pattern,
+        reason: reason
+    }
+}
+
+# ============================================================================
+# BUDGET POLICY - Rate limiting per action
+# ============================================================================
+
+class BudgetPolicy {
+    field action: string
+    field max_count: number
+    field window_seconds: number
+    field current_count: number
+    field window_start: number
+    
+    method check(proposal: Proposal, timestamp: number) -> bool {
+        when proposal.action != self.action => return true
+        
+        # Reset window if expired
+        when timestamp - self.window_start > self.window_seconds * 1000 {
+            self.current_count = 0
+            self.window_start = timestamp
+        }
+        
+        return self.current_count < self.max_count
+    }
+    
+    method consume(action: string, timestamp: number) {
+        when action != self.action => return
+        
+        # Reset window if expired
+        when timestamp - self.window_start > self.window_seconds * 1000 {
+            self.current_count = 0
+            self.window_start = timestamp
+        }
+        
+        self.current_count = self.current_count + 1
+    }
+    
+    method remaining() -> number {
+        return max(0, self.max_count - self.current_count)
+    }
+}
+
+fun create_budget_policy(action: string, max_count: number, window_seconds: number) -> BudgetPolicy {
+    return BudgetPolicy {
+        action: action,
+        max_count: max_count,
+        window_seconds: window_seconds,
+        current_count: 0,
+        window_start: 0
+    }
+}
+
+# ============================================================================
+# TIE BREAKER - Deterministic selection when weights are equal
+# ============================================================================
+
+const TIE_RULE_ORDER = "rule_order"
+const TIE_ALPHABETICAL = "alphabetical"
+const TIE_HASH = "hash"
+
+fun break_tie(proposals: list, method: string, seed: number) -> list {
+    when method == TIE_RULE_ORDER {
+        return native_sort(proposals, fun(a, b) {
+            return a.rule_line - b.rule_line
+        })
+    }
+    when method == TIE_ALPHABETICAL {
+        return native_sort(proposals, fun(a, b) {
+            return native_compare(a.action, b.action)
+        })
+    }
+    when method == TIE_HASH {
+        return native_sort(proposals, fun(a, b) {
+            var ha = native_hash(a.rule_id) ^ seed
+            var hb = native_hash(b.rule_id) ^ seed
+            return ha - hb
+        })
+    }
+    return proposals
+}
+
+# ============================================================================
+# EGO CONFIG
+# ============================================================================
+
+class EgoConfig {
+    field select_top_n: number
+    field tie_breaker: string
+    field min_weight: number
+}
+
+fun default_ego_config() -> EgoConfig {
+    return EgoConfig {
+        select_top_n: 1,
+        tie_breaker: TIE_RULE_ORDER,
+        min_weight: 0.0
+    }
+}
+
+# ============================================================================
+# EGO - The Subconscious
+# Filters and selects proposals
+# ============================================================================
+
+class Ego {
+    field forbid_policies: list        # List of ForbidPolicy
+    field budget_policies: list        # List of BudgetPolicy
+    field config: EgoConfig
+    
+    method add_forbid(policy: ForbidPolicy) {
+        self.forbid_policies = self.forbid_policies + [policy]
+    }
+    
+    method add_budget(policy: BudgetPolicy) {
+        self.budget_policies = self.budget_policies + [policy]
+    }
+    
+    method set_config(config: EgoConfig) {
+        self.config = config
+    }
+    
+    method select(proposals: ProposalList, ctx: ExecutionContext) -> SelectionResult {
+        var result = create_selection_result()
+        var timestamp = ctx.timestamp
+        
+        # Phase 1: Apply forbid policies
+        var allowed = create_proposal_list()
+        for p in proposals.to_list() {
+            var forbidden = false
+            var forbid_reason = ""
+            var forbid_policy_id = ""
+            
+            for policy in self.forbid_policies {
+                when policy.matches(p, ctx) {
+                    forbidden = true
+                    forbid_reason = policy.reason
+                    forbid_policy_id = policy.id
+                }
+            }
+            
+            when forbidden {
+                result.rejected = result.rejected + [
+                    create_rejected(p, forbid_reason, forbid_policy_id)
+                ]
+            }
+            else {
+                allowed.add(p)
+            }
+        }
+        
+        # Phase 2: Apply budget policies
+        var budgeted = create_proposal_list()
+        for p in allowed.to_list() {
+            var budget_ok = true
+            var budget_reason = ""
+            var budget_policy_id = ""
+            
+            for policy in self.budget_policies {
+                when not policy.check(p, timestamp) {
+                    budget_ok = false
+                    budget_reason = "Budget exceeded for " + policy.action
+                    budget_policy_id = "budget_" + policy.action
+                }
+            }
+            
+            when not budget_ok {
+                result.rejected = result.rejected + [
+                    create_rejected(p, budget_reason, budget_policy_id)
+                ]
+            }
+            else {
+                budgeted.add(p)
+            }
+        }
+        
+        # Phase 3: Apply min weight filter
+        var weighted = budgeted.filter(fun(p) {
+            return p.weight >= self.config.min_weight
+        })
+        
+        # Phase 4: Sort by weight
+        weighted.sort_by_weight()
+        
+        # Phase 5: Break ties
+        var sorted_list = break_tie(weighted.to_list(), self.config.tie_breaker, ctx.seed)
+        
+        # Phase 6: Select top N
+        var count = min(self.config.select_top_n, len(sorted_list))
+        for i in range(0, count) {
+            var p = sorted_list[i]
+            result.selected = result.selected + [
+                create_selected(p, i + 1, "Selected as #" + native_to_string(i + 1))
+            ]
+            
+            # Consume budget
+            for policy in self.budget_policies {
+                policy.consume(p.action, timestamp)
+            }
+        }
+        
+        return result
+    }
+}
+
+fun create_ego() -> Ego {
+    return Ego {
+        forbid_policies: [],
+        budget_policies: [],
+        config: default_ego_config()
+    }
+}
+
+# ============================================================================
+# EGO DSL
+# ============================================================================
+
+class EgoBlock {
+    field ego: Ego
+    
+    method forbid_when(condition: Condition, reason: string) -> EgoBlock {
+        self.ego.add_forbid(create_forbid_policy(
+            "forbid_" + native_to_string(len(self.ego.forbid_policies) + 1),
+            condition,
+            "",
+            reason
+        ))
+        return self
+    }
+    
+    method forbid_action(action: string, condition: Condition, reason: string) -> EgoBlock {
+        self.ego.add_forbid(create_forbid_policy(
+            "forbid_" + action,
+            condition,
+            action,
+            reason
+        ))
+        return self
+    }
+    
+    method budget(action: string, max_count: number, window_seconds: number) -> EgoBlock {
+        self.ego.add_budget(create_budget_policy(action, max_count, window_seconds))
+        return self
+    }
+    
+    method select_top(n: number) -> EgoBlock {
+        self.ego.config.select_top_n = n
+        return self
+    }
+    
+    method min_weight(w: number) -> EgoBlock {
+        self.ego.config.min_weight = w
+        return self
+    }
+    
+    method on_tie(method: string) -> EgoBlock {
+        self.ego.config.tie_breaker = method
+        return self
+    }
+    
+    method build() -> Ego {
+        return self.ego
+    }
+}
+
+fun EGO() -> EgoBlock {
+    return EgoBlock {
+        ego: create_ego()
+    }
+}
+
+# ============================================================================
+# TESTS
+# ============================================================================
+
+test "Ego forbid policy" {
+    var ego = create_ego()
+    ego.add_forbid(create_forbid_policy(
+        "no_danger",
+        cond_fact("danger_mode"),
+        "",
+        "Danger mode is active"
+    ))
+    
+    var proposals = create_proposal_list()
+    proposals.add(create_proposal("log", {}, 0.9, "r1", 10))
+    proposals.add(create_proposal("http.post", {}, 0.8, "r2", 20))
+    
+    # Without danger mode
+    var facts1 = create_fact_store()
+    var ctx1 = create_execution_context(create_intent("test", {}), facts1)
+    
+    var result1 = ego.select(proposals, ctx1)
+    assert result1.selected_count() == 1
+    assert result1.rejected_count() == 0
+    
+    # With danger mode
+    var facts2 = create_fact_store()
+    facts2.set("danger_mode", value_bool(true))
+    var ctx2 = create_execution_context(create_intent("test", {}), facts2)
+    
+    var result2 = ego.select(proposals, ctx2)
+    assert result2.rejected_count() == 2
+}
+
+test "Ego forbid specific action" {
+    var ego = create_ego()
+    ego.add_forbid(create_forbid_policy(
+        "no_http_post",
+        cond_true(),
+        "http.post",
+        "HTTP POST is disabled"
+    ))
+    ego.config.select_top_n = 5
+    
+    var proposals = create_proposal_list()
+    proposals.add(create_proposal("log", {}, 0.9, "r1", 10))
+    proposals.add(create_proposal("http.post", {}, 0.8, "r2", 20))
+    proposals.add(create_proposal("http.get", {}, 0.7, "r3", 30))
+    
+    var ctx = create_execution_context(create_intent("test", {}), create_fact_store())
+    var result = ego.select(proposals, ctx)
+    
+    assert result.selected_count() == 2
+    assert result.rejected_count() == 1
+    assert result.rejected[0].proposal.action == "http.post"
+}
+
+test "Ego budget policy" {
+    var ego = create_ego()
+    ego.add_budget(create_budget_policy("log", 2, 60))
+    ego.config.select_top_n = 10
+    
+    var proposals = create_proposal_list()
+    proposals.add(create_proposal("log", {}, 0.9, "r1", 10))
+    proposals.add(create_proposal("log", {}, 0.8, "r2", 20))
+    proposals.add(create_proposal("log", {}, 0.7, "r3", 30))
+    proposals.add(create_proposal("log", {}, 0.6, "r4", 40))
+    
+    var ctx = create_execution_context(create_intent("test", {}), create_fact_store())
+    var result = ego.select(proposals, ctx)
+    
+    # Only 2 logs allowed per budget
+    assert result.selected_count() == 2
+    assert result.rejected_count() == 2
+}
+
+test "Ego select top N" {
+    var ego = create_ego()
+    ego.config.select_top_n = 2
+    
+    var proposals = create_proposal_list()
+    proposals.add(create_proposal("a", {}, 0.9, "r1", 10))
+    proposals.add(create_proposal("b", {}, 0.8, "r2", 20))
+    proposals.add(create_proposal("c", {}, 0.7, "r3", 30))
+    
+    var ctx = create_execution_context(create_intent("test", {}), create_fact_store())
+    var result = ego.select(proposals, ctx)
+    
+    assert result.selected_count() == 2
+    assert result.selected[0].proposal.action == "a"
+    assert result.selected[1].proposal.action == "b"
+}
+
+test "Ego min weight filter" {
+    var ego = create_ego()
+    ego.config.select_top_n = 10
+    ego.config.min_weight = 0.5
+    
+    var proposals = create_proposal_list()
+    proposals.add(create_proposal("a", {}, 0.9, "r1", 10))
+    proposals.add(create_proposal("b", {}, 0.3, "r2", 20))  # Below min
+    proposals.add(create_proposal("c", {}, 0.6, "r3", 30))
+    
+    var ctx = create_execution_context(create_intent("test", {}), create_fact_store())
+    var result = ego.select(proposals, ctx)
+    
+    assert result.selected_count() == 2
+}
+
+test "Ego DSL" {
+    var ego = EGO()
+        .forbid_when(cond_fact("read_only"), "System is read-only")
+        .forbid_action("http.post", cond_fact("danger"), "Danger mode")
+        .budget("log", 100, 60)
+        .budget("http.get", 10, 1)
+        .select_top(3)
+        .min_weight(0.1)
+        .on_tie(TIE_ALPHABETICAL)
+        .build()
+    
+    assert len(ego.forbid_policies) == 2
+    assert len(ego.budget_policies) == 2
+    assert ego.config.select_top_n == 3
+    assert ego.config.min_weight == 0.1
+}

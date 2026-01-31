@@ -1,0 +1,22 @@
+// Teste simples de map em objeto
+class Teste {
+    field data
+    
+    fun setup() {
+        if (self.data == null) { self.data = {} }
+        self.data["chave1"] = "valor1"
+        println("Registrado: chave1")
+    }
+    
+    fun lookup() {
+        var val = self.data["chave1"]
+        println("Lookup result: " + native_to_string(val != null))
+        if (val != null) {
+            println("Valor: " + val)
+        }
+    }
+}
+
+var obj = Teste {}
+obj.setup()
+obj.lookup()

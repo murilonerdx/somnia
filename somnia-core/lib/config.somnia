@@ -1,0 +1,347 @@
+# ============================================================================
+# Somnia Core Library - Configuration Parser
+# Pure Somnia configuration system (equivalent to application.properties)
+# ============================================================================
+
+import { value_string, value_number, value_bool, value_null, value_map } from "./types"
+
+# ============================================================================
+# CONFIG PARSER - Parses somnia.config files
+# ============================================================================
+
+class ConfigValue {
+    field key: string
+    field value: any
+    field type: string  # "string", "number", "bool", "map"
+}
+
+class ConfigSection {
+    field name: string
+    field values: map
+    
+    method get(key: string) -> any {
+        when key in self.values => return self.values[key]
+        return null
+    }
+    
+    method get_string(key: string, default_val: string) -> string {
+        var val = self.get(key)
+        when val == null => return default_val
+        return val
+    }
+    
+    method get_number(key: string, default_val: number) -> number {
+        var val = self.get(key)
+        when val == null => return default_val
+        return val
+    }
+    
+    method get_bool(key: string, default_val: bool) -> bool {
+        var val = self.get(key)
+        when val == null => return default_val
+        return val
+    }
+}
+
+class Config {
+    field app: ConfigSection
+    field env: ConfigSection
+    field logging: ConfigSection
+    field sections: map
+    
+    method get_section(name: string) -> ConfigSection {
+        when name in self.sections => return self.sections[name]
+        return ConfigSection { name: name, values: {} }
+    }
+    
+    method get(key: string) -> any {
+        # Support dot notation: "app.name" or "env.PORT"
+        var parts = string_split(key, ".")
+        when len(parts) == 1 => {
+            when key in self.app.values => return self.app.values[key]
+            return null
+        }
+        
+        var section_name = parts[0]
+        var section = self.get_section(section_name)
+        when len(parts) >= 2 => return section.get(parts[1])
+        return null
+    }
+}
+
+class ConfigParser {
+    field input: string
+    field position: number
+    field line: number
+    
+    method parse() -> Config {
+        var sections = {}
+        var app_values = {}
+        var env_values = {}
+        var logging_values = {}
+        
+        while self.position < len(self.input) {
+            self.skip_whitespace()
+            
+            when self.position >= len(self.input) => break
+            
+            var char = self.peek()
+            
+            # Skip comments
+            when char == "#" => {
+                self.skip_line()
+                continue
+            }
+            
+            # Parse config block
+            when self.match_word("config") => {
+                var section = self.parse_block()
+                sections[section.name] = section
+                when section.name == "App" => app_values = section.values
+            }
+            
+            # Parse env block
+            when self.match_word("env") => {
+                var section = self.parse_block()
+                env_values = section.values
+            }
+            
+            # Parse logging block
+            when self.match_word("logging") => {
+                var section = self.parse_block()
+                logging_values = section.values
+            }
+            
+            default => self.advance()
+        }
+        
+        return Config {
+            app: ConfigSection { name: "app", values: app_values },
+            env: ConfigSection { name: "env", values: env_values },
+            logging: ConfigSection { name: "logging", values: logging_values },
+            sections: sections
+        }
+    }
+    
+    method parse_block() -> ConfigSection {
+        self.skip_whitespace()
+        var name = self.parse_identifier()
+        self.skip_whitespace()
+        self.expect("{")
+        
+        var values = {}
+        
+        while self.position < len(self.input) {
+            self.skip_whitespace()
+            
+            when self.peek() == "}" => {
+                self.advance()
+                break
+            }
+            
+            when self.peek() == "#" => {
+                self.skip_line()
+                continue
+            }
+            
+            # Parse nested block or key-value
+            var key = self.parse_identifier()
+            self.skip_whitespace()
+            
+            when self.peek() == "{" => {
+                # Nested block
+                self.advance()
+                var nested = self.parse_nested_block()
+                values[key] = nested
+            }
+            
+            when self.peek() == "=" => {
+                self.advance()
+                self.skip_whitespace()
+                var value = self.parse_value()
+                values[key] = value
+            }
+        }
+        
+        return ConfigSection { name: name, values: values }
+    }
+    
+    method parse_nested_block() -> map {
+        var nested = {}
+        
+        while self.position < len(self.input) {
+            self.skip_whitespace()
+            
+            when self.peek() == "}" => {
+                self.advance()
+                break
+            }
+            
+            when self.peek() == "#" => {
+                self.skip_line()
+                continue
+            }
+            
+            var key = self.parse_identifier()
+            self.skip_whitespace()
+            self.expect("=")
+            self.skip_whitespace()
+            var value = self.parse_value()
+            nested[key] = value
+        }
+        
+        return nested
+    }
+    
+    method parse_value() -> any {
+        self.skip_whitespace()
+        var char = self.peek()
+        
+        # String
+        when char == "\"" => return self.parse_string()
+        
+        # Number
+        when self.is_digit(char) or char == "-" => return self.parse_number()
+        
+        # Boolean
+        when self.match_word("true") => return true
+        when self.match_word("false") => return false
+        
+        # Null
+        when self.match_word("null") => return null
+        
+        # Identifier (reference)
+        return self.parse_identifier()
+    }
+    
+    method parse_string() -> string {
+        self.expect("\"")
+        var result = ""
+        
+        while self.position < len(self.input) and self.peek() != "\"" {
+            when self.peek() == "\\" => {
+                self.advance()
+                var escaped = self.peek()
+                self.advance()
+                when escaped == "n" => result = result + "\n"
+                when escaped == "t" => result = result + "\t"
+                when escaped == "\"" => result = result + "\""
+                default => result = result + escaped
+            }
+            default => {
+                result = result + self.peek()
+                self.advance()
+            }
+        }
+        
+        self.expect("\"")
+        return result
+    }
+    
+    method parse_number() -> number {
+        var start = self.position
+        
+        when self.peek() == "-" => self.advance()
+        
+        while self.position < len(self.input) and self.is_digit(self.peek()) {
+            self.advance()
+        }
+        
+        when self.peek() == "." => {
+            self.advance()
+            while self.position < len(self.input) and self.is_digit(self.peek()) {
+                self.advance()
+            }
+        }
+        
+        var num_str = string_substring(self.input, start, self.position)
+        return native_parse_number(num_str)
+    }
+    
+    method parse_identifier() -> string {
+        var start = self.position
+        
+        while self.position < len(self.input) {
+            var char = self.peek()
+            when not (self.is_letter(char) or self.is_digit(char) or char == "_") => break
+            self.advance()
+        }
+        
+        return string_substring(self.input, start, self.position)
+    }
+    
+    # Helper methods
+    method peek() -> string {
+        when self.position >= len(self.input) => return ""
+        return string_substring(self.input, self.position, self.position + 1)
+    }
+    
+    method advance() {
+        when self.position < len(self.input) => {
+            when self.peek() == "\n" => self.line = self.line + 1
+            self.position = self.position + 1
+        }
+    }
+    
+    method expect(char: string) {
+        when self.peek() == char => self.advance()
+    }
+    
+    method match_word(word: string) -> bool {
+        var end_pos = self.position + len(word)
+        when end_pos > len(self.input) => return false
+        
+        var substr = string_substring(self.input, self.position, end_pos)
+        when substr == word => {
+            self.position = end_pos
+            return true
+        }
+        return false
+    }
+    
+    method skip_whitespace() {
+        while self.position < len(self.input) {
+            var char = self.peek()
+            when char == " " or char == "\t" or char == "\n" or char == "\r" => {
+                when char == "\n" => self.line = self.line + 1
+                self.advance()
+            }
+            default => break
+        }
+    }
+    
+    method skip_line() {
+        while self.position < len(self.input) and self.peek() != "\n" {
+            self.advance()
+        }
+        when self.peek() == "\n" => self.advance()
+    }
+    
+    method is_digit(char: string) -> bool {
+        return char >= "0" and char <= "9"
+    }
+    
+    method is_letter(char: string) -> bool {
+        return (char >= "a" and char <= "z") or (char >= "A" and char <= "Z")
+    }
+}
+
+# ============================================================================
+# FACTORY FUNCTIONS
+# ============================================================================
+
+fun parse_config(input: string) -> Config {
+    var parser = ConfigParser { input: input, position: 0, line: 1 }
+    return parser.parse()
+}
+
+fun load_config(path: string) -> Config {
+    var content = native_read_file(path)
+    return parse_config(content)
+}
+
+# ============================================================================
+# EXPORTS
+# ============================================================================
+
+export { Config, ConfigSection, ConfigParser, parse_config, load_config }

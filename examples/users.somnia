@@ -1,0 +1,236 @@
+// ============================================================================
+// User Management REST API - Pure Somnia
+// Usando a sintaxe atual da VM Somnia
+// ============================================================================
+
+app "user-api" {
+    package "com.somnia.users"
+    spring boot "3.2.0"
+}
+
+act {
+    // Entity User
+    entity User table "users" {
+        id: UUID
+        email: String
+        name: String
+        passwordHash: String
+        role: String
+        active: Boolean
+        createdAt: Timestamp
+        lastLogin: Timestamp
+    }
+    
+    // DTOs
+    dto RegisterRequest {
+        email: String
+        password: String
+        name: String
+    }
+    
+    dto LoginRequest {
+        email: String
+        password: String
+    }
+    
+    dto LoginResponse {
+        token: String
+        user: Json
+    }
+    
+    dto UserResponse {
+        id: UUID
+        email: String
+        name: String
+        role: String
+        active: Boolean
+    }
+    
+    dto UpdateProfileRequest {
+        name: String
+    }
+    
+    dto ChangePasswordRequest {
+        currentPassword: String
+        newPassword: String
+    }
+    
+    // Repository
+    repository UserRepository : jpa <com.somnia.users.model.User, UUID> {
+        fun save(user: com.somnia.users.model.User): com.somnia.users.model.User
+        fun findAll(): List
+        fun findById(id: UUID): com.somnia.users.model.User
+        fun findByEmail(email: String): com.somnia.users.model.User
+        fun deleteById(id: UUID): Void
+    }
+    
+    // HTTP Endpoints
+    http {
+        base "/api"
+        
+        // Authentication
+        on POST "/auth/register" as intent("auth.register")
+            body com.somnia.users.dto.RegisterRequest
+            
+        on POST "/auth/login" as intent("auth.login")
+            body com.somnia.users.dto.LoginRequest
+            
+        on POST "/auth/logout" as intent("auth.logout")
+            auth required
+            
+        on GET "/auth/me" as intent("auth.me")
+            auth required
+            
+        on PUT "/auth/profile" as intent("auth.profile.update")
+            auth required
+            body com.somnia.users.dto.UpdateProfileRequest
+            
+        on PUT "/auth/password" as intent("auth.password.change")
+            auth required
+            body com.somnia.users.dto.ChangePasswordRequest
+            
+        // Admin endpoints
+        on GET "/admin/users" as intent("admin.users.list")
+            auth required
+            
+        on POST "/admin/users/{userId}/deactivate" as intent("admin.users.deactivate")
+            auth required
+            args { userId: UUID }
+            
+        on POST "/admin/users/{userId}/activate" as intent("admin.users.activate")
+            auth required
+            args { userId: UUID }
+        
+        // Health check
+        on GET "/health" as intent("health.check")
+    }
+    
+    // Security
+    security {
+        jwt {
+            secret "${JWT_SECRET:somnia-secret-key-2024}"
+            expiration 86400
+        }
+        
+        rules {
+            allow "admin.users.*" requires roles("ADMIN")
+            allow "auth.*" requires valid
+            allow "health.check" requires valid
+        }
+    }
+    
+    // =========================================================================
+    // Actions
+    // =========================================================================
+    
+    action auth.register(req: com.somnia.users.dto.RegisterRequest) returns com.somnia.users.model.User
+        bind tx required {
+            bind repo UserRepository.save({
+                "email": req.email,
+                "name": req.name,
+                "passwordHash": hash(req.password),
+                "role": "USER",
+                "active": true,
+                "createdAt": now(),
+                "lastLogin": null
+            })
+        }
+        
+    action auth.login(req: com.somnia.users.dto.LoginRequest) returns com.somnia.users.dto.LoginResponse
+        bind repo UserRepository.findByEmail(req.email) then {
+            if (result.active and verifyHash(req.password, result.passwordHash)) {
+                bind repo UserRepository.save({
+                    "lastLogin": now()
+                })
+                return {
+                    "token": generateJwt(result.id, result.role),
+                    "user": {
+                        "id": result.id,
+                        "email": result.email,
+                        "name": result.name,
+                        "role": result.role
+                    }
+                }
+            }
+            fail status(401) "Invalid credentials"
+        }
+        fail status(401) "Invalid credentials"
+        
+    action auth.logout() returns Json
+        bind {
+            return { "message": "Logged out successfully" }
+        }
+        
+    action auth.me() returns com.somnia.users.dto.UserResponse
+        bind repo UserRepository.findById(currentUser.id)
+        
+    action auth.profile.update(req: com.somnia.users.dto.UpdateProfileRequest) returns com.somnia.users.dto.UserResponse
+        bind tx required {
+            bind repo UserRepository.findById(currentUser.id) then {
+                result.name = req.name
+                bind repo UserRepository.save(result)
+            }
+        }
+        
+    action auth.password.change(req: com.somnia.users.dto.ChangePasswordRequest) returns Json
+        bind tx required {
+            bind repo UserRepository.findById(currentUser.id) then {
+                if (verifyHash(req.currentPassword, result.passwordHash)) {
+                    result.passwordHash = hash(req.newPassword)
+                    bind repo UserRepository.save(result)
+                    return { "message": "Password changed successfully" }
+                }
+                fail status(400) "Current password is incorrect"
+            }
+        }
+        
+    action admin.users.list() permission("admin") returns Json
+        bind sql "SELECT id, email, name, role, active, created_at FROM users ORDER BY created_at DESC"
+        
+    action admin.users.deactivate(userId: UUID) permission("admin") returns Json
+        bind tx required {
+            bind repo UserRepository.findById(userId) then {
+                result.active = false
+                bind repo UserRepository.save(result)
+                return { "message": "User deactivated", "userId": userId }
+            }
+        }
+        fail status(404) "User not found"
+        
+    action admin.users.activate(userId: UUID) permission("admin") returns Json
+        bind tx required {
+            bind repo UserRepository.findById(userId) then {
+                result.active = true
+                bind repo UserRepository.save(result)
+                return { "message": "User activated", "userId": userId }
+            }
+        }
+        fail status(404) "User not found"
+        
+    action health.check() returns Json
+        bind {
+            return {
+                "status": "healthy",
+                "service": "User Management API",
+                "version": "1.0.0",
+                "timestamp": now()
+            }
+        }
+        
+    // Renders
+    render auth.register {
+        auth.register
+    }
+    
+    render auth.login {
+        auth.login
+    }
+    
+    render auth.me {
+        auth.me
+    }
+    
+    render admin.users.list {
+        admin.users.list
+    }
+}

@@ -1,0 +1,296 @@
+# ============================================================================
+# Somnia Core Library - Types
+# Self-hosted core types for the Somnia language
+# ============================================================================
+
+# Every Somnia program has: ID (unconscious), EGO (subconscious), ACT (conscious)
+
+# ============================================================================
+# PRIMITIVE TYPE ALIASES
+# ============================================================================
+
+type string = native_string
+type number = native_number
+type bool = native_bool
+type null = native_null
+type list = native_list
+type map = native_map
+
+# ============================================================================
+# CORE VALUE TYPE
+# ============================================================================
+
+# A Value can be any Somnia data type
+class Value {
+    field type: string      # "string", "number", "bool", "null", "list", "map", "object"
+    field data: any
+    
+    method is_truthy() -> bool {
+        when self.type == "null" => return false
+        when self.type == "bool" => return self.data
+        when self.type == "number" => return self.data != 0
+        when self.type == "string" => return len(self.data) > 0
+        when self.type == "list" => return len(self.data) > 0
+        when self.type == "map" => return len(self.data) > 0
+        default => return true
+    }
+    
+    method equals(other: Value) -> bool {
+        when self.type != other.type => return false
+        return self.data == other.data
+    }
+    
+    method to_string() -> string {
+        when self.type == "null" => return "null"
+        when self.type == "bool" => return if self.data then "true" else "false"
+        when self.type == "string" => return self.data
+        default => return native_to_string(self.data)
+    }
+}
+
+# Factory functions for Value
+fun value_string(s: string) -> Value {
+    return Value { type: "string", data: s }
+}
+
+fun value_number(n: number) -> Value {
+    return Value { type: "number", data: n }
+}
+
+fun value_bool(b: bool) -> Value {
+    return Value { type: "bool", data: b }
+}
+
+fun value_null() -> Value {
+    return Value { type: "null", data: null }
+}
+
+fun value_list(items: list) -> Value {
+    return Value { type: "list", data: items }
+}
+
+fun value_map(entries: map) -> Value {
+    return Value { type: "map", data: entries }
+}
+
+# ============================================================================
+# INTENT - External trigger
+# ============================================================================
+
+class Intent {
+    field name: string
+    field args: map
+    
+    method get(key: string) -> Value {
+        when key in self.args => return self.args[key]
+        return value_null()
+    }
+    
+    method has(key: string) -> bool {
+        return key in self.args
+    }
+}
+
+fun create_intent(name: string, args: map) -> Intent {
+    return Intent { name: name, args: args }
+}
+
+# ============================================================================
+# FACT - World state
+# ============================================================================
+
+class Fact {
+    field key: string
+    field value: Value
+}
+
+class FactStore {
+    field facts: map
+    
+    method set(key: string, value: Value) {
+        self.facts[key] = value
+    }
+    
+    method get(key: string) -> Value {
+        when key in self.facts => return self.facts[key]
+        return value_null()
+    }
+    
+    method has(key: string) -> bool {
+        return key in self.facts
+    }
+    
+    method remove(key: string) {
+        when key in self.facts => delete self.facts[key]
+    }
+    
+    method keys() -> list {
+        return native_keys(self.facts)
+    }
+}
+
+fun create_fact_store() -> FactStore {
+    return FactStore { facts: {} }
+}
+
+# ============================================================================
+# DRIVE - Motivation
+# ============================================================================
+
+class Drive {
+    field name: string
+    field intensity: number     # 0.0 to 1.0
+    
+    method is_active() -> bool {
+        return self.intensity > 0.1
+    }
+    
+    method boost(amount: number) {
+        self.intensity = min(1.0, self.intensity + amount)
+    }
+    
+    method decay(amount: number) {
+        self.intensity = max(0.0, self.intensity - amount)
+    }
+}
+
+fun create_drive(name: string, intensity: number) -> Drive {
+    return Drive { name: name, intensity: clamp(intensity, 0.0, 1.0) }
+}
+
+# ============================================================================
+# AFFECT - Emotional state
+# ============================================================================
+
+class Affect {
+    field name: string
+    field valence: number       # -1.0 to 1.0
+    
+    method is_positive() -> bool {
+        return self.valence > 0
+    }
+    
+    method is_negative() -> bool {
+        return self.valence < 0
+    }
+    
+    method is_neutral() -> bool {
+        return self.valence == 0
+    }
+}
+
+fun create_affect(name: string, valence: number) -> Affect {
+    return Affect { name: name, valence: clamp(valence, -1.0, 1.0) }
+}
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+fun clamp(value: number, min_val: number, max_val: number) -> number {
+    when value < min_val => return min_val
+    when value > max_val => return max_val
+    return value
+}
+
+fun min(a: number, b: number) -> number {
+    when a < b => return a
+    return b
+}
+
+fun max(a: number, b: number) -> number {
+    when a > b => return a
+    return b
+}
+
+# ============================================================================
+# TESTS
+# ============================================================================
+
+test "Value string truthiness" {
+    var v = value_string("hello")
+    assert v.is_truthy() == true
+    
+    var empty = value_string("")
+    assert empty.is_truthy() == false
+}
+
+test "Value number truthiness" {
+    var zero = value_number(0)
+    assert zero.is_truthy() == false
+    
+    var one = value_number(1)
+    assert one.is_truthy() == true
+    
+    var neg = value_number(-5)
+    assert neg.is_truthy() == true
+}
+
+test "Value null truthiness" {
+    var n = value_null()
+    assert n.is_truthy() == false
+}
+
+test "Value equality" {
+    var a = value_string("test")
+    var b = value_string("test")
+    var c = value_string("other")
+    
+    assert a.equals(b) == true
+    assert a.equals(c) == false
+}
+
+test "Intent creation and access" {
+    var intent = create_intent("greet", { "name": value_string("World") })
+    
+    assert intent.name == "greet"
+    assert intent.has("name") == true
+    assert intent.has("missing") == false
+}
+
+test "FactStore operations" {
+    var store = create_fact_store()
+    
+    store.set("user_logged_in", value_bool(true))
+    store.set("user_id", value_number(123))
+    
+    assert store.has("user_logged_in") == true
+    assert store.get("user_logged_in").data == true
+    assert store.get("user_id").data == 123
+    
+    store.remove("user_logged_in")
+    assert store.has("user_logged_in") == false
+}
+
+test "Drive creation and methods" {
+    var drive = create_drive("efficiency", 0.5)
+    
+    assert drive.name == "efficiency"
+    assert drive.intensity == 0.5
+    assert drive.is_active() == true
+    
+    drive.boost(0.3)
+    assert drive.intensity == 0.8
+    
+    drive.decay(0.5)
+    assert drive.intensity == 0.3
+}
+
+test "Affect creation" {
+    var positive = create_affect("joy", 0.8)
+    assert positive.is_positive() == true
+    assert positive.is_negative() == false
+    
+    var negative = create_affect("fear", -0.6)
+    assert negative.is_negative() == true
+    assert negative.is_positive() == false
+    
+    var neutral = create_affect("calm", 0.0)
+    assert neutral.is_neutral() == true
+}
+
+test "Clamp function" {
+    assert clamp(5, 0, 10) == 5
+    assert clamp(-5, 0, 10) == 0
+    assert clamp(15, 0, 10) == 10
+}

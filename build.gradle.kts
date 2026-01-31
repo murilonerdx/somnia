@@ -14,11 +14,16 @@ allprojects {
 subprojects {
     apply(plugin = "maven-publish")
 
+    /*
     publishing {
         publications {
              create<MavenPublication>("maven") {
-                 from(components.findByName("java"))
+                 val javaComponent = components.findByName("java")
+                 if (javaComponent != null) {
+                     from(javaComponent)
+                 }
              }
         }
     }
+    */
 }

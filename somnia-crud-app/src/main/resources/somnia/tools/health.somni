@@ -1,0 +1,20 @@
+
+pattern HealthCheck(Path) {
+    // Defines a simple DTO for the response
+    dto HealthStatus {
+        status: String
+        uptime: Int
+    }
+
+    // Action that returns fixed data (or dynamic if syscalls supported)
+    action "System.check"() returns HealthStatus
+        // Mocking a result for now. Future: bind syscall "runtime.uptime"
+        bind map HealthStatus {
+            "status": "UP",
+            "uptime": 100
+        }
+
+    http {
+        on GET "${Path}" as intent("System.check") returns HealthStatus
+    }
+}

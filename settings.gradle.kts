@@ -4,6 +4,9 @@ include("somnia-lang")
 include("somnia-engine")
 
 include("somnia-runtime")
+include("somnia-patterns")
 include("somnia-boot-starter")
 include("somnia-crud-app")
+include("somnia-cli")
+include("somnia-vm")
 

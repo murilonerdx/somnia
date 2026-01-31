@@ -1,0 +1,434 @@
+# ============================================================================
+# Somnia REST API - Simple Test Suite
+# Using only functions (no classes) for VM compatibility
+# ============================================================================
+
+# ============================================================================
+# IN-MEMORY DATABASE
+# ============================================================================
+
+var db_users = []
+var id_counter = 0
+
+fun generate_id() {
+    id_counter = id_counter + 1
+    return "usr_" + native_to_string(id_counter)
+}
+
+fun db_insert(doc) {
+    # Gerar ID
+    var new_id = generate_id()
+    println("[DEBUG] Generated id: " + new_id)
+    
+    # Criar novo mapa com ID e dados
+    var new_doc = {
+        "id": new_id,
+        "name": doc["name"],
+        "email": doc["email"],
+        "password": doc["password"],
+        "role": doc["role"],
+        "created_at": native_time_ms()
+    }
+    
+    db_users = db_users + [new_doc]
+    println("[DEBUG] Inserted doc with id: " + new_doc["id"])
+    return new_doc
+}
+
+fun db_find_all() {
+    return db_users
+}
+
+fun db_find_by_id(id) {
+    println("[DEBUG] Looking for id: " + id)
+    println("[DEBUG] db_users has " + native_to_string(len(db_users)) + " items")
+    for doc in db_users {
+        println("[DEBUG] Checking doc id: " + doc["id"] + " vs " + id)
+        when doc["id"] == id => return doc
+    }
+    return null
+}
+
+fun db_update(id, updates) {
+    for i in range(0, len(db_users)) {
+        when db_users[i]["id"] == id => {
+            for key in native_keys(updates) {
+                db_users[i][key] = updates[key]
+            }
+            return db_users[i]
+        }
+    }
+    return null
+}
+
+fun db_delete(id) {
+    var new_list = []
+    var found = false
+    
+    for doc in db_users {
+        when doc["id"] == id => found = true
+        when doc["id"] != id => new_list = new_list + [doc]
+    }
+    
+    db_users = new_list
+    return found
+}
+
+fun db_count() {
+    return len(db_users)
+}
+
+# ============================================================================
+# RESPONSE HELPERS
+# ============================================================================
+
+fun make_response(status, body) {
+    return { "status": status, "body": body }
+}
+
+fun success_response(data) {
+    return make_response(200, { "success": true, "data": data })
+}
+
+fun created_response(data) {
+    return make_response(201, { "success": true, "data": data })
+}
+
+fun error_response(status, message) {
+    return make_response(status, { "success": false, "error": message })
+}
+
+# ============================================================================
+# API HANDLERS
+# ============================================================================
+
+fun api_list_users() {
+    var users = db_find_all()
+    var safe_users = []
+    
+    for u in users {
+        safe_users = safe_users + [{
+            "id": u["id"],
+            "name": u["name"],
+            "email": u["email"],
+            "role": u["role"]
+        }]
+    }
+    
+    return success_response({
+        "users": safe_users,
+        "count": len(safe_users)
+    })
+}
+
+fun api_get_user(id) {
+    var user = db_find_by_id(id)
+    
+    when user == null => return error_response(404, "User not found")
+    
+    return success_response({
+        "id": user["id"],
+        "name": user["name"],
+        "email": user["email"],
+        "role": user["role"]
+    })
+}
+
+fun api_create_user(data) {
+    # Validation - check name
+    when not ("name" in data) => {
+        return error_response(400, "Name is required")
+    }
+    when data["name"] == "" => {
+        return error_response(400, "Name is required")
+    }
+    when data["name"] == null => {
+        return error_response(400, "Name is required")
+    }
+    
+    # Validation - check email
+    when not ("email" in data) => {
+        return error_response(400, "Email is required")
+    }
+    when data["email"] == "" => {
+        return error_response(400, "Email is required")
+    }
+    when data["email"] == null => {
+        return error_response(400, "Email is required")
+    }
+    
+    # Check email uniqueness
+    var users = db_find_all()
+    for u in users {
+        when u["email"] == data["email"] => {
+            return error_response(409, "Email already exists")
+        }
+    }
+    
+    # Create user
+    var role = "user"
+    when "role" in data => role = data["role"]
+    
+    var user = db_insert({
+        "name": data["name"],
+        "email": data["email"],
+        "password": data["password"],
+        "role": role
+    })
+    
+    return created_response({
+        "id": user["id"],
+        "name": user["name"],
+        "email": user["email"],
+        "role": user["role"]
+    })
+}
+
+fun api_update_user(id, data) {
+    var existing = db_find_by_id(id)
+    when existing == null => return error_response(404, "User not found")
+    
+    var updates = {}
+    when "name" in data => updates["name"] = data["name"]
+    when "email" in data => updates["email"] = data["email"]
+    when "role" in data => updates["role"] = data["role"]
+    
+    var updated = db_update(id, updates)
+    
+    return success_response({
+        "id": updated["id"],
+        "name": updated["name"],
+        "email": updated["email"],
+        "role": updated["role"]
+    })
+}
+
+fun api_delete_user(id) {
+    var deleted = db_delete(id)
+    
+    when not deleted => return error_response(404, "User not found")
+    
+    return success_response({ "message": "User deleted successfully" })
+}
+
+fun api_health() {
+    return success_response({ "status": "healthy", "version": "1.0.0" })
+}
+
+# ============================================================================
+# SEED DATA
+# ============================================================================
+
+fun seed_data() {
+    println("[API] Seeding database...")
+    
+    db_insert({
+        "name": "Admin User",
+        "email": "admin@somnia.dev",
+        "password": "admin123",
+        "role": "admin"
+    })
+    
+    db_insert({
+        "name": "John Doe",
+        "email": "john@example.com",
+        "password": "password123",
+        "role": "user"
+    })
+    
+    db_insert({
+        "name": "Jane Smith",
+        "email": "jane@example.com",
+        "password": "password456",
+        "role": "user"
+    })
+    
+    println("[API] Seeded " + native_to_string(db_count()) + " users")
+}
+
+# ============================================================================
+# TEST SUITE
+# ============================================================================
+
+fun run_tests() {
+    println("")
+    println("========================================================")
+    println("       SOMNIA REST API - TEST SUITE                     ")
+    println("========================================================")
+    println("")
+    
+    var passed = 0
+    var failed = 0
+    
+    # Seed data
+    seed_data()
+    println("")
+    
+    # Test 1: List all users
+    println("[TEST 1] GET /api/users - List all users")
+    var res = api_list_users()
+    when res["status"] == 200 => {
+        println("  OK Status: 200")
+        println("  OK Count: " + native_to_string(res["body"]["data"]["count"]))
+        passed = passed + 1
+    }
+    when res["status"] != 200 => {
+        println("  FAIL: Unexpected status " + native_to_string(res["status"]))
+        failed = failed + 1
+    }
+    println("")
+    
+    # Test 2: Get user by ID
+    println("[TEST 2] GET /api/users/usr_1 - Get user by ID")
+    res = api_get_user("usr_1")
+    when res["status"] == 200 => {
+        println("  OK Status: 200")
+        println("  OK Found user: " + res["body"]["data"]["email"])
+        passed = passed + 1
+    }
+    when res["status"] != 200 => {
+        println("  FAIL: User not found, status " + native_to_string(res["status"]))
+        failed = failed + 1
+    }
+    println("")
+    
+    # Test 3: Create user
+    println("[TEST 3] POST /api/users - Create new user")
+    res = api_create_user({
+        "name": "Test User",
+        "email": "test@example.com",
+        "password": "test123",
+        "role": "user"
+    })
+    when res["status"] == 201 => {
+        println("  OK Status: 201 Created")
+        println("  OK User ID: " + res["body"]["data"]["id"])
+        passed = passed + 1
+    }
+    when res["status"] != 201 => {
+        println("  FAIL: Expected 201, got " + native_to_string(res["status"]))
+        failed = failed + 1
+    }
+    println("")
+    
+    # Test 4: Duplicate email
+    println("[TEST 4] POST /api/users - Duplicate email (should fail)")
+    res = api_create_user({
+        "name": "Test User 2",
+        "email": "test@example.com",
+        "password": "test123",
+        "role": "user"
+    })
+    when res["status"] == 409 => {
+        println("  OK Status: 409 Conflict (expected)")
+        println("  OK Error: " + res["body"]["error"])
+        passed = passed + 1
+    }
+    when res["status"] != 409 => {
+        println("  FAIL: Should have returned 409, got " + native_to_string(res["status"]))
+        failed = failed + 1
+    }
+    println("")
+    
+    # Test 5: Update user
+    println("[TEST 5] PUT /api/users/usr_2 - Update user")
+    res = api_update_user("usr_2", { "name": "Updated Name" })
+    when res["status"] == 200 => {
+        println("  OK Status: 200")
+        println("  OK Name updated to: " + res["body"]["data"]["name"])
+        passed = passed + 1
+    }
+    when res["status"] != 200 => {
+        println("  FAIL: Update failed, status " + native_to_string(res["status"]))
+        failed = failed + 1
+    }
+    println("")
+    
+    # Test 6: Delete user
+    println("[TEST 6] DELETE /api/users/usr_3 - Delete user")
+    res = api_delete_user("usr_3")
+    when res["status"] == 200 => {
+        println("  OK Status: 200")
+        println("  OK User deleted")
+        passed = passed + 1
+    }
+    when res["status"] != 200 => {
+        println("  FAIL: Delete failed")
+        failed = failed + 1
+    }
+    println("")
+    
+    # Test 7: Get deleted user (should fail)
+    println("[TEST 7] GET /api/users/usr_3 - Get deleted user (should fail)")
+    res = api_get_user("usr_3")
+    when res["status"] == 404 => {
+        println("  OK Status: 404 Not Found (expected)")
+        passed = passed + 1
+    }
+    when res["status"] != 404 => {
+        println("  FAIL: Should have returned 404")
+        failed = failed + 1
+    }
+    println("")
+    
+    # Test 8: Health check
+    println("[TEST 8] GET /api/health - Health check")
+    res = api_health()
+    when res["status"] == 200 => {
+        println("  OK Status: 200")
+        println("  OK API is healthy")
+        passed = passed + 1
+    }
+    when res["status"] != 200 => {
+        println("  FAIL: Health check failed")
+        failed = failed + 1
+    }
+    println("")
+    
+    # Test 9: Validation error - missing name
+    println("[TEST 9] POST /api/users - Validation error (missing name)")
+    res = api_create_user({ "email": "noname@example.com" })
+    when res["status"] == 400 => {
+        println("  OK Status: 400 Bad Request (expected)")
+        println("  OK Error: " + res["body"]["error"])
+        passed = passed + 1
+    }
+    when res["status"] != 400 => {
+        println("  FAIL: Should have returned 400")
+        failed = failed + 1
+    }
+    println("")
+    
+    # Test 10: Validation error - missing email
+    println("[TEST 10] POST /api/users - Validation error (missing email)")
+    res = api_create_user({ "name": "No Email" })
+    when res["status"] == 400 => {
+        println("  OK Status: 400 Bad Request (expected)")
+        println("  OK Error: " + res["body"]["error"])
+        passed = passed + 1
+    }
+    when res["status"] != 400 => {
+        println("  FAIL: Should have returned 400")
+        failed = failed + 1
+    }
+    println("")
+    
+    # Summary
+    println("========================================================")
+    println("  RESULTS: " + native_to_string(passed) + " passed, " + native_to_string(failed) + " failed")
+    println("========================================================")
+    
+    when failed == 0 => {
+        println("")
+        println("  ALL TESTS PASSED!")
+        println("")
+    }
+    when failed > 0 => {
+        println("")
+        println("  SOME TESTS FAILED")
+        println("")
+    }
+}
+
+# Run the test suite
+run_tests()

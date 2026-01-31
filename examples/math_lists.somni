@@ -1,0 +1,68 @@
+# ====================================
+# Somnia Language: Math & Lists
+# Author: Somnia Team
+# ====================================
+#
+# This example demonstrates math and list operations.
+# Uses std/math and std/list modules.
+
+ID {
+    const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    var total = 0
+    var average = 0
+}
+
+EGO {
+    fun calculateStats() {
+        println("[Math] Calculating statistics...")
+        
+        total = sum(numbers)
+        average = avg(numbers)
+        
+        println("Numbers:", numbers)
+        println("Sum:", total)
+        println("Average:", average)
+        println("First:", first(numbers))
+        println("Last:", last(numbers))
+        println("Size:", size(numbers))
+    }
+    
+    fun mathFunctions() {
+        println("[Math] Mathematical functions:")
+        println("PI:", PI())
+        println("E:", E())
+        println("sqrt(16):", sqrt(16))
+        println("pow(2, 8):", pow(2, 8))
+        println("abs(-42):", abs(-42))
+        println("random():", random())
+        println("randomInt(1, 100):", randomInt(1, 100))
+    }
+    
+    fun listOperations() {
+        println("[List] List operations:")
+        
+        var myList = range(1, 5)
+        println("range(1, 5):", myList)
+        
+        myList = push(myList, 99)
+        println("After push(99):", myList)
+        
+        myList = reverse(myList)
+        println("After reverse:", myList)
+        
+        println("includes(99):", includes(myList, 99))
+        println("includes(50):", includes(myList, 50))
+    }
+}
+
+ACT {
+    action main {
+        println("=== Somnia Math & Lists Demo ===")
+        calculateStats()
+        println("")
+        mathFunctions()
+        println("")
+        listOperations()
+        println("=== Done ===")
+    }
+}

@@ -1,0 +1,138 @@
+// ============================================================================
+// Inventory API - Pure Somnia REST Service
+// Products, stock, and movements
+// ============================================================================
+
+app "inventory-api" {
+    package "com.somnia.inventory"
+    spring boot "3.2.0"
+}
+
+act {
+    entity Item table "items" {
+        id: UUID
+        sku: String
+        name: String
+        description: String
+        quantity: Integer
+        minQuantity: Integer
+        location: String
+        unitPrice: Double
+        createdAt: Timestamp
+    }
+    
+    entity Movement table "movements" {
+        id: UUID
+        itemId: UUID
+        type: String
+        quantity: Integer
+        reason: String
+        createdAt: Timestamp
+    }
+    
+    dto CreateItemRequest {
+        sku: String
+        name: String
+        description: String
+        quantity: Integer
+        minQuantity: Integer
+        location: String
+        unitPrice: Double
+    }
+    
+    dto StockMovementRequest {
+        quantity: Integer
+        reason: String
+    }
+    
+    repository ItemRepository : jpa <com.somnia.inventory.model.Item, UUID> {
+        fun save(item: com.somnia.inventory.model.Item): com.somnia.inventory.model.Item
+        fun findAll(): List
+        fun findById(id: UUID): com.somnia.inventory.model.Item
+        fun findBySku(sku: String): com.somnia.inventory.model.Item
+        fun deleteById(id: UUID): Void
+    }
+    
+    repository MovementRepository : jpa <com.somnia.inventory.model.Movement, UUID> {
+        fun save(mov: com.somnia.inventory.model.Movement): com.somnia.inventory.model.Movement
+        fun findByItemId(itemId: UUID): List
+    }
+    
+    http {
+        base "/api"
+        on POST "/items" as intent("items.create")
+            body com.somnia.inventory.dto.CreateItemRequest
+        on GET "/items" as intent("items.list")
+        on GET "/items/{itemId}" as intent("items.get")
+            args { itemId: UUID }
+        on DELETE "/items/{itemId}" as intent("items.delete")
+            args { itemId: UUID }
+        on POST "/items/{itemId}/receive" as intent("stock.receive")
+            args { itemId: UUID }
+            body com.somnia.inventory.dto.StockMovementRequest
+        on POST "/items/{itemId}/ship" as intent("stock.ship")
+            args { itemId: UUID }
+            body com.somnia.inventory.dto.StockMovementRequest
+        on GET "/items/{itemId}/movements" as intent("movements.list")
+            args { itemId: UUID }
+        on GET "/low-stock" as intent("items.lowStock")
+    }
+    
+    action items.create(req: com.somnia.inventory.dto.CreateItemRequest) permission("db.write") returns com.somnia.inventory.model.Item
+        bind tx required {
+            bind repo ItemRepository.save({
+                "sku": req.sku,
+                "name": req.name,
+                "description": req.description,
+                "quantity": req.quantity,
+                "minQuantity": req.minQuantity,
+                "location": req.location,
+                "unitPrice": req.unitPrice
+            })
+        }
+        
+    action items.list() permission("db.read") returns Json
+        bind sql "SELECT id, sku, name, quantity, min_quantity, location, unit_price FROM items ORDER BY name"
+        
+    action items.get(itemId: UUID) permission("db.read") returns com.somnia.inventory.model.Item
+        bind repo ItemRepository.findById(itemId)
+        
+    action items.delete(itemId: UUID) permission("db.write") returns Json
+        bind repo ItemRepository.deleteById(itemId)
+        
+    action stock.receive(itemId: UUID, req: com.somnia.inventory.dto.StockMovementRequest) permission("db.write") returns Json
+        bind tx required {
+            bind sql "UPDATE items SET quantity = quantity + ? WHERE id = ?"
+            bind repo MovementRepository.save({
+                "itemId": itemId,
+                "type": "RECEIVE",
+                "quantity": req.quantity,
+                "reason": req.reason
+            })
+        }
+        
+    action stock.ship(itemId: UUID, req: com.somnia.inventory.dto.StockMovementRequest) permission("db.write") returns Json
+        bind tx required {
+            bind sql "UPDATE items SET quantity = quantity - ? WHERE id = ?"
+            bind repo MovementRepository.save({
+                "itemId": itemId,
+                "type": "SHIP",
+                "quantity": req.quantity,
+                "reason": req.reason
+            })
+        }
+        
+    action movements.list(itemId: UUID) permission("db.read") returns Json
+        bind repo MovementRepository.findByItemId(itemId)
+        
+    action items.lowStock() permission("db.read") returns Json
+        bind sql "SELECT id, sku, name, quantity, min_quantity FROM items WHERE quantity <= min_quantity ORDER BY quantity"
+        
+    render items.list {
+        items.list
+    }
+    
+    render items.lowStock {
+        items.lowStock
+    }
+}

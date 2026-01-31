@@ -1,0 +1,10 @@
+# Somnia REST API Dependencies
+
+deps somnia-rest-api {
+    version "1.0.0"
+    
+    require "somnia-core" version "1.0.0" from "../somnia-core"
+    require "somnia-stdlib" version "1.0.0" from "../somnia-stdlib"
+    require "somnia-http" version "1.0.0" from "../somnia-http"
+    require "somnia-json" version "1.0.0" from "../somnia-json"
+}

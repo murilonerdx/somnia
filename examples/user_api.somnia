@@ -1,0 +1,470 @@
+# ============================================================================
+# User Management API - Pure Somnia REST Service
+# 100% Somnia - Zero Kotlin/Java
+# ============================================================================
+
+# ============================================================================
+# DATA TYPES
+# ============================================================================
+
+class User {
+    field id: string
+    field email: string
+    field name: string
+    field password_hash: string
+    field role: string              # admin, user, guest
+    field active: bool
+    field created_at: number
+    field last_login: number
+    field profile: map
+}
+
+class Session {
+    field token: string
+    field user_id: string
+    field created_at: number
+    field expires_at: number
+}
+
+# In-memory database
+var users = {}
+var sessions = {}
+var user_counter = 0
+
+# ============================================================================
+# HELPERS
+# ============================================================================
+
+fun generate_user_id() -> string {
+    user_counter = user_counter + 1
+    return "user_" + to_string(user_counter)
+}
+
+fun generate_token() -> string {
+    return "token_" + to_string(random_int(100000, 999999)) + "_" + to_string(time_ms())
+}
+
+fun hash_password(password: string) -> string {
+    # Simple hash (in production use bcrypt)
+    return "hashed_" + password
+}
+
+fun verify_password(password: string, hash: string) -> bool {
+    return hash_password(password) == hash
+}
+
+fun user_to_json(user: User) -> map {
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role,
+        "active": user.active,
+        "created_at": user.created_at,
+        "last_login": user.last_login,
+        "profile": user.profile
+    }
+}
+
+fun get_current_user(token: string) -> User {
+    when token in sessions {
+        var session = sessions[token]
+        when session.expires_at > time_ms() {
+            when session.user_id in users {
+                return users[session.user_id]
+            }
+        }
+    }
+    return null
+}
+
+fun is_valid_email(email: string) -> bool {
+    return contains(email, "@") and contains(email, ".")
+}
+
+# ============================================================================
+# ID - The Unconscious (Rule Engine)
+# ============================================================================
+
+ID {
+    drive security = 0.95
+    drive usability = 0.8
+    
+    # =========================================================================
+    # REGISTER
+    # =========================================================================
+    
+    when intent("POST /auth/register") {
+        var email = intent.body.email
+        var password = intent.body.password
+        var name = intent.body.name or "User"
+        
+        # Check email exists
+        for id in keys(users) {
+            when users[id].email == email {
+                => respond(409, { "error": "Email already registered" }) @0.9
+            }
+        }
+        
+        var user = User {
+            id: generate_user_id(),
+            email: email,
+            name: name,
+            password_hash: hash_password(password),
+            role: "user",
+            active: true,
+            created_at: time_ms(),
+            last_login: 0,
+            profile: {}
+        }
+        
+        users[user.id] = user
+        
+        => respond(201, {
+            "message": "User registered successfully",
+            "user": user_to_json(user)
+        }) @0.9
+    }
+    
+    # =========================================================================
+    # LOGIN
+    # =========================================================================
+    
+    when intent("POST /auth/login") {
+        var email = intent.body.email
+        var password = intent.body.password
+        
+        for id in keys(users) {
+            var user = users[id]
+            when user.email == email and verify_password(password, user.password_hash) {
+                when not user.active {
+                    => respond(403, { "error": "Account is deactivated" }) @0.9
+                }
+                
+                # Create session
+                var token = generate_token()
+                var session = Session {
+                    token: token,
+                    user_id: user.id,
+                    created_at: time_ms(),
+                    expires_at: time_ms() + (24 * 60 * 60 * 1000)  # 24 hours
+                }
+                sessions[token] = session
+                
+                # Update last login
+                user.last_login = time_ms()
+                users[id] = user
+                
+                => respond(200, {
+                    "message": "Login successful",
+                    "token": token,
+                    "user": user_to_json(user),
+                    "expires_at": session.expires_at
+                }) @0.9
+            }
+        }
+        
+        => respond(401, { "error": "Invalid email or password" }) @0.8
+    }
+    
+    # =========================================================================
+    # LOGOUT
+    # =========================================================================
+    
+    when intent("POST /auth/logout") {
+        var token = intent.headers.authorization
+        
+        when token in sessions {
+            delete sessions[token]
+            => respond(200, { "message": "Logged out successfully" }) @0.9
+        }
+        
+        => respond(200, { "message": "Already logged out" }) @0.8
+    }
+    
+    # =========================================================================
+    # GET CURRENT USER
+    # =========================================================================
+    
+    when intent("GET /auth/me") {
+        var token = intent.headers.authorization
+        var user = get_current_user(token)
+        
+        when user != null {
+            => respond(200, user_to_json(user)) @0.9
+        }
+        
+        => respond(401, { "error": "Not authenticated" }) @0.8
+    }
+    
+    # =========================================================================
+    # UPDATE PROFILE
+    # =========================================================================
+    
+    when intent("PUT /auth/profile") {
+        var token = intent.headers.authorization
+        var user = get_current_user(token)
+        
+        when user != null {
+            when intent.body.name != null {
+                user.name = intent.body.name
+            }
+            when intent.body.profile != null {
+                user.profile = intent.body.profile
+            }
+            
+            users[user.id] = user
+            
+            => respond(200, {
+                "message": "Profile updated",
+                "user": user_to_json(user)
+            }) @0.9
+        }
+        
+        => respond(401, { "error": "Not authenticated" }) @0.8
+    }
+    
+    # =========================================================================
+    # CHANGE PASSWORD
+    # =========================================================================
+    
+    when intent("PUT /auth/password") {
+        var token = intent.headers.authorization
+        var user = get_current_user(token)
+        
+        when user != null {
+            var current = intent.body.current_password
+            var new_password = intent.body.new_password
+            
+            when verify_password(current, user.password_hash) {
+                user.password_hash = hash_password(new_password)
+                users[user.id] = user
+                
+                => respond(200, { "message": "Password changed successfully" }) @0.9
+            }
+            
+            => respond(400, { "error": "Current password is incorrect" }) @0.85
+        }
+        
+        => respond(401, { "error": "Not authenticated" }) @0.8
+    }
+    
+    # =========================================================================
+    # ADMIN: LIST USERS
+    # =========================================================================
+    
+    when intent("GET /admin/users") {
+        var token = intent.headers.authorization
+        var user = get_current_user(token)
+        
+        when user != null and user.role == "admin" {
+            var user_list = []
+            for id in keys(users) {
+                user_list = user_list + [user_to_json(users[id])]
+            }
+            
+            => respond(200, {
+                "users": user_list,
+                "count": len(user_list)
+            }) @0.9
+        }
+        
+        when user != null {
+            => respond(403, { "error": "Admin access required" }) @0.85
+        }
+        
+        => respond(401, { "error": "Not authenticated" }) @0.8
+    }
+    
+    # =========================================================================
+    # ADMIN: DEACTIVATE USER
+    # =========================================================================
+    
+    when intent("POST /admin/users/:id/deactivate") {
+        var token = intent.headers.authorization
+        var admin = get_current_user(token)
+        var target_id = intent.params.id
+        
+        when admin != null and admin.role == "admin" {
+            when target_id in users {
+                users[target_id].active = false
+                
+                => respond(200, {
+                    "message": "User deactivated",
+                    "user": user_to_json(users[target_id])
+                }) @0.9
+            }
+            
+            => respond(404, { "error": "User not found" }) @0.85
+        }
+        
+        => respond(403, { "error": "Admin access required" }) @0.8
+    }
+    
+    # =========================================================================
+    # HEALTH
+    # =========================================================================
+    
+    when intent("GET /health") {
+        => respond(200, {
+            "status": "healthy",
+            "service": "User Management API",
+            "version": "1.0.0",
+            "active_sessions": len(keys(sessions)),
+            "total_users": len(keys(users))
+        }) @1.0
+    }
+}
+
+# ============================================================================
+# EGO - Policy Layer
+# ============================================================================
+
+EGO {
+    # Rate limiting for auth endpoints
+    budget "respond" = 100 per 60s for "/auth/login"
+    budget "respond" = 10 per 60s for "/auth/register"
+    
+    # Validation
+    forbid when not is_valid_email(intent.body.email) and intent("POST /auth/register") {
+        reason: "Invalid email format"
+        => respond(400, { "error": "Invalid email format" })
+    }
+    
+    forbid when len(intent.body.password) < 6 and intent("POST /auth/register") {
+        reason: "Password too short"
+        => respond(400, { "error": "Password must be at least 6 characters" })
+    }
+    
+    select top 1
+}
+
+# ============================================================================
+# ACT - Execution Layer
+# ============================================================================
+
+ACT {
+    action respond(status: number, body: any) {
+        http_respond(status, body)
+    }
+}
+
+# ============================================================================
+# SERVER
+# ============================================================================
+
+server {
+    host: "0.0.0.0"
+    port: 8081
+    
+    on_start {
+        println("╔═══════════════════════════════════════════════════════════════╗")
+        println("║     USER MANAGEMENT API                                       ║")
+        println("║     100% Pure Somnia                                          ║")
+        println("╚═══════════════════════════════════════════════════════════════╝")
+        println("")
+        println("Server running at http://localhost:8081")
+        println("")
+        println("Endpoints:")
+        println("  POST   /auth/register    - Register new user")
+        println("  POST   /auth/login       - Login")
+        println("  POST   /auth/logout      - Logout")
+        println("  GET    /auth/me          - Get current user")
+        println("  PUT    /auth/profile     - Update profile")
+        println("  PUT    /auth/password    - Change password")
+        println("  GET    /admin/users      - List all users (admin)")
+        println("")
+        
+        # Create default admin
+        users["admin"] = User {
+            id: "admin",
+            email: "admin@example.com",
+            name: "Administrator",
+            password_hash: hash_password("admin123"),
+            role: "admin",
+            active: true,
+            created_at: time_ms(),
+            last_login: 0,
+            profile: {}
+        }
+        println("Default admin created: admin@example.com / admin123")
+    }
+}
+
+# ============================================================================
+# TESTS
+# ============================================================================
+
+test "Register user" {
+    var response = simulate_request("POST", "/auth/register", {
+        "email": "test@example.com",
+        "password": "password123",
+        "name": "Test User"
+    })
+    
+    assert response.status == 201
+    assert response.body.user.email == "test@example.com"
+    assert response.body.user.role == "user"
+}
+
+test "Login user" {
+    # Register first
+    simulate_request("POST", "/auth/register", {
+        "email": "login@example.com",
+        "password": "password123"
+    })
+    
+    var response = simulate_request("POST", "/auth/login", {
+        "email": "login@example.com",
+        "password": "password123"
+    })
+    
+    assert response.status == 200
+    assert response.body.token != null
+    assert response.body.user.email == "login@example.com"
+}
+
+test "Invalid login" {
+    var response = simulate_request("POST", "/auth/login", {
+        "email": "wrong@example.com",
+        "password": "wrongpassword"
+    })
+    
+    assert response.status == 401
+    assert response.body.error == "Invalid email or password"
+}
+
+test "Get current user with token" {
+    # Register and login
+    simulate_request("POST", "/auth/register", {
+        "email": "me@example.com",
+        "password": "password123"
+    })
+    
+    var login = simulate_request("POST", "/auth/login", {
+        "email": "me@example.com",
+        "password": "password123"
+    })
+    
+    var response = simulate_request("GET", "/auth/me", {}, {
+        "authorization": login.body.token
+    })
+    
+    assert response.status == 200
+    assert response.body.email == "me@example.com"
+}
+
+test "Duplicate email rejected" {
+    simulate_request("POST", "/auth/register", {
+        "email": "dup@example.com",
+        "password": "password123"
+    })
+    
+    var response = simulate_request("POST", "/auth/register", {
+        "email": "dup@example.com",
+        "password": "password456"
+    })
+    
+    assert response.status == 409
+    assert response.body.error == "Email already registered"
+}

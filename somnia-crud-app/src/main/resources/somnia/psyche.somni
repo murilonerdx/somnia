@@ -1,0 +1,35 @@
+
+// ID Layer: Symbols & Memory
+id {
+    const POWER_THRESHOLD = 90
+    let current_power = 50
+
+    archetype Hero {
+        name: String
+        level: Int
+    }
+}
+
+// EGO Layer: Logic & Mediation
+ego {
+    fun calculateBoost(level: Int) {
+        return level * 10
+    }
+
+    // Rules
+    when (current_power > POWER_THRESHOLD) => propose(UnleashUltimate)
+}
+
+// ACT Layer: Behavior
+act {
+    contract Powerful {
+        fun unleash(): Void
+    }
+
+    pattern Heroic(H) implements Powerful {
+        action "UnleashUltimate" {
+             let boost = ego.calculateBoost(H.level)
+             bind sys.log("Unleashing absolute power! Boost: " + boost)
+        }
+    }
+}

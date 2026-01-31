@@ -11,6 +11,9 @@ class Lexer(private val input: String) {
         "trace" to TokenType.KEYWORD_TRACE, "archetype" to TokenType.KEYWORD_ARCHETYPE,
         "when" to TokenType.KEYWORD_WHEN, "propose" to TokenType.KEYWORD_PROPOSE,
         "forbid" to TokenType.KEYWORD_FORBID, "require" to TokenType.KEYWORD_REQUIRE,
+        "forbid" to TokenType.KEYWORD_FORBID, "require" to TokenType.KEYWORD_REQUIRE,
+        "const" to TokenType.KEYWORD_CONST, "let" to TokenType.KEYWORD_LET,
+        "if" to TokenType.KEYWORD_IF, "else" to TokenType.KEYWORD_ELSE, "return" to TokenType.KEYWORD_RETURN,
         "select" to TokenType.KEYWORD_SELECT, "beam" to TokenType.KEYWORD_BEAM,
         "top" to TokenType.KEYWORD_TOP, "sample" to TokenType.KEYWORD_SAMPLE,
         "intent" to TokenType.KEYWORD_INTENT, "action" to TokenType.KEYWORD_ACTION,
@@ -60,7 +63,11 @@ class Lexer(private val input: String) {
         "publish" to TokenType.KEYWORD_PUBLISH,
         "client" to TokenType.KEYWORD_CLIENT,
         "json" to TokenType.KEYWORD_JSON,
-        "pattern" to TokenType.KEYWORD_PATTERN
+        "client" to TokenType.KEYWORD_CLIENT,
+        "json" to TokenType.KEYWORD_JSON,
+        "pattern" to TokenType.KEYWORD_PATTERN,
+        "contract" to TokenType.KEYWORD_CONTRACT,
+        "implements" to TokenType.KEYWORD_IMPLEMENTS
     )
 
     fun tokenize(): List<Token> = tokenizeWithSpans().map { it.token }
@@ -85,6 +92,7 @@ class Lexer(private val input: String) {
                 '{' -> tokens.add(singleChar(TokenType.LBRACE, "{"))
                 '}' -> tokens.add(singleChar(TokenType.RBRACE, "}"))
                 ',' -> tokens.add(singleChar(TokenType.COMMA, ","))
+                '#' -> skipComment()    // Python-style comments
                 '/' -> {
                     if (peekNext() == '/') skipComment() else tokens.add(singleChar(TokenType.SLASH, "/"))
                 }
@@ -103,7 +111,7 @@ class Lexer(private val input: String) {
                 '=' -> {
                     if (peekNext() == '>') tokens.add(fixed2(TokenType.FAT_ARROW, "=>"))
                     else if (peekNext() == '=') tokens.add(fixed2(TokenType.EQ_EQ, "=="))
-                    else error("Unexpected character =")
+                    else tokens.add(singleChar(TokenType.EQ, "="))
                 }
                 '"' -> tokens.add(readString())
                 else -> {

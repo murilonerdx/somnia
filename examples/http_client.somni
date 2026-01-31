@@ -1,0 +1,41 @@
+# ====================================
+# Somnia Language: HTTP Client
+# Author: Somnia Team
+# ====================================
+#
+# This example demonstrates HTTP client operations.
+# Uses the std/http module for making requests.
+
+ID {
+    const apiUrl = "https://jsonplaceholder.typicode.com"
+    var response = null
+}
+
+EGO {
+    # GET request example
+    fun fetchPosts() {
+        println("[HTTP] Fetching posts...")
+        response = httpGet(apiUrl + "/posts/1")
+        println("[HTTP] Status:", response.status)
+        println("[HTTP] Body:", response.body)
+    }
+    
+    # POST request example
+    fun createPost() {
+        var data = '{"title": "Hello from Somnia", "body": "Created via Somnia!", "userId": 1}'
+        println("[HTTP] Creating new post...")
+        response = httpPost(apiUrl + "/posts", data)
+        println("[HTTP] Status:", response.status)
+        println("[HTTP] Response:", response.body)
+    }
+}
+
+ACT {
+    action main {
+        println("=== Somnia HTTP Client Demo ===")
+        fetchPosts()
+        println("")
+        createPost()
+        println("=== Done ===")
+    }
+}

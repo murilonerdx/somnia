@@ -1,0 +1,6 @@
+// Simple Somnia test file
+id {
+    const MESSAGE = "Hello, World!"
+    const PI = 3.14
+    let counter = 0
+}

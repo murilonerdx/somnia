@@ -1,0 +1,39 @@
+# ====================================
+# Somnia Language: HTTP Server
+# Author: Somnia Team
+# ====================================
+#
+# This example creates an HTTP server.
+# Access at http://localhost:8080
+
+ID {
+    const port = 8080
+    const serverName = "Somnia HTTP Server"
+    var requests = 0
+}
+
+EGO {
+    fun handleRequest(method, path, body) {
+        requests = requests + 1
+        println("[Request #", requests, "]", method, path)
+        
+        if path == "/" {
+            return '{"message": "Welcome to ' + serverName + '!"}'
+        }
+        
+        if path == "/health" {
+            return '{"status": "ok", "requests": ' + requests + '}'
+        }
+        
+        return '{"error": "Not Found", "path": "' + path + '"}'
+    }
+}
+
+ACT {
+    action main {
+        println("=== ", serverName, " ===")
+        println("Starting on port", port)
+        httpServe(port, "handleRequest")
+        println("Server is running...")
+    }
+}

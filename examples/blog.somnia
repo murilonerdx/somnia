@@ -1,0 +1,115 @@
+// ============================================================================
+// Blog API - Pure Somnia REST Service
+// Posts, comments, and tags
+// ============================================================================
+
+app "blog-api" {
+    package "com.somnia.blog"
+    spring boot "3.2.0"
+}
+
+act {
+    entity Post table "posts" {
+        id: UUID
+        title: String
+        content: String
+        authorId: UUID
+        published: Boolean
+        views: Integer
+        createdAt: Timestamp
+    }
+    
+    entity Comment table "comments" {
+        id: UUID
+        postId: UUID
+        authorId: UUID
+        content: String
+        createdAt: Timestamp
+    }
+    
+    entity Tag table "tags" {
+        id: UUID
+        name: String
+    }
+    
+    dto CreatePostRequest {
+        title: String
+        content: String
+    }
+    
+    dto CreateCommentRequest {
+        content: String
+    }
+    
+    repository PostRepository : jpa <com.somnia.blog.model.Post, UUID> {
+        fun save(post: com.somnia.blog.model.Post): com.somnia.blog.model.Post
+        fun findAll(): List
+        fun findById(id: UUID): com.somnia.blog.model.Post
+        fun deleteById(id: UUID): Void
+    }
+    
+    repository CommentRepository : jpa <com.somnia.blog.model.Comment, UUID> {
+        fun save(comment: com.somnia.blog.model.Comment): com.somnia.blog.model.Comment
+        fun findByPostId(postId: UUID): List
+        fun deleteById(id: UUID): Void
+    }
+    
+    http {
+        base "/api"
+        on POST "/posts" as intent("posts.create")
+            body com.somnia.blog.dto.CreatePostRequest
+        on GET "/posts" as intent("posts.list")
+        on GET "/posts/{postId}" as intent("posts.get")
+            args { postId: UUID }
+        on DELETE "/posts/{postId}" as intent("posts.delete")
+            args { postId: UUID }
+        on POST "/posts/{postId}/publish" as intent("posts.publish")
+            args { postId: UUID }
+        on GET "/posts/{postId}/comments" as intent("comments.list")
+            args { postId: UUID }
+        on POST "/posts/{postId}/comments" as intent("comments.create")
+            args { postId: UUID }
+            body com.somnia.blog.dto.CreateCommentRequest
+    }
+    
+    action posts.create(req: com.somnia.blog.dto.CreatePostRequest) permission("author") returns com.somnia.blog.model.Post
+        bind tx required {
+            bind repo PostRepository.save({
+                "title": req.title,
+                "content": req.content,
+                "published": false,
+                "views": 0
+            })
+        }
+        
+    action posts.list() permission("db.read") returns Json
+        bind sql "SELECT id, title, author_id, published, views, created_at FROM posts WHERE published = true ORDER BY created_at DESC"
+        
+    action posts.get(postId: UUID) permission("db.read") returns com.somnia.blog.model.Post
+        bind repo PostRepository.findById(postId)
+        
+    action posts.delete(postId: UUID) permission("author") returns Json
+        bind repo PostRepository.deleteById(postId)
+        
+    action postsPublish(postId: UUID) permission("author") returns Json
+        bind sql "UPDATE posts SET published = true WHERE id = ?"
+        
+    action comments.list(postId: UUID) permission("db.read") returns Json
+        bind repo CommentRepository.findByPostId(postId)
+        
+    action comments.create(postId: UUID, req: com.somnia.blog.dto.CreateCommentRequest) permission("db.write") returns com.somnia.blog.model.Comment
+        bind tx required {
+            bind repo CommentRepository.save({
+                "postId": postId,
+                "content": req.content
+            })
+        }
+        
+    render posts.list {
+        posts.list
+    }
+    
+    render posts.get {
+        posts.get
+    }
+}

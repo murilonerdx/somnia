@@ -1,0 +1,101 @@
+# Simple API test
+var id_counter = 0
+var db_users = []
+
+fun generate_id() {
+    id_counter = id_counter + 1
+    return "usr_" + native_to_string(id_counter)
+}
+
+fun db_insert(name, email, role) {
+    var new_id = generate_id()
+    var doc = {
+        "id": new_id,
+        "name": name,
+        "email": email,
+        "role": role
+    }
+    db_users = db_users + [doc]
+    return doc
+}
+
+fun db_find_by_id(id) {
+    for doc in db_users {
+        when doc["id"] == id => return doc
+    }
+    return null
+}
+
+fun api_get_user(id) {
+    var user = db_find_by_id(id)
+    when user == null => return { "status": 404, "error": "Not found" }
+    return { "status": 200, "data": user }
+}
+
+fun api_list_users() {
+    return { "status": 200, "count": len(db_users), "data": db_users }
+}
+
+# Main test
+fun main() {
+    println("========================================")
+    println("  SOMNIA SIMPLE API TEST")
+    println("========================================")
+    println("")
+    
+    # Insert 3 users
+    var u1 = db_insert("Admin", "admin@test.com", "admin")
+    println("Inserted: " + u1["id"] + " - " + u1["name"])
+    
+    var u2 = db_insert("John", "john@test.com", "user")
+    println("Inserted: " + u2["id"] + " - " + u2["name"])
+    
+    var u3 = db_insert("Jane", "jane@test.com", "user")
+    println("Inserted: " + u3["id"] + " - " + u3["name"])
+    
+    println("")
+    
+    # Test list
+    var res = api_list_users()
+    println("[TEST] List users - Count: " + native_to_string(res["count"]))
+    when res["count"] == 3 => println("  OK - 3 users found")
+    when res["count"] != 3 => println("  FAIL - Expected 3 users")
+    
+    # Test get by ID
+    println("")
+    println("[TEST] Get user usr_1")
+    res = api_get_user("usr_1")
+    when res["status"] == 200 => {
+        println("  OK - Found: " + res["data"]["name"])
+    }
+    when res["status"] != 200 => {
+        println("  FAIL - Status " + native_to_string(res["status"]))
+    }
+    
+    println("")
+    println("[TEST] Get user usr_2")
+    res = api_get_user("usr_2")
+    when res["status"] == 200 => {
+        println("  OK - Found: " + res["data"]["name"])
+    }
+    when res["status"] != 200 => {
+        println("  FAIL - Status " + native_to_string(res["status"]))
+    }
+    
+    println("")
+    println("[TEST] Get non-existent user")
+    res = api_get_user("usr_99")
+    when res["status"] == 404 => {
+        println("  OK - 404 Not Found (expected)")
+    }
+    when res["status"] != 404 => {
+        println("  FAIL - Expected 404")
+    }
+    
+    println("")
+    println("========================================")
+    println("  TEST COMPLETE")
+    println("========================================")
+}
+
+main()

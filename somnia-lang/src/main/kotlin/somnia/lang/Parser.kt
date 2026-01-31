@@ -37,6 +37,8 @@ class Parser(private val tokens: List<Token>) {
         while (!check(TokenType.RBRACE) && !isAtEnd()) {
             try {
                 when (peek().type) {
+                    TokenType.KEYWORD_CONST -> block.consts.add(parseConstDecl())
+                    TokenType.KEYWORD_LET -> block.vars.add(parseVarDecl())
                     TokenType.KEYWORD_DRIVE, TokenType.KEYWORD_AFFECT, TokenType.KEYWORD_ARCHETYPE -> {
                         block.declarations.add(parseDeclaration())
                     }
@@ -107,6 +109,23 @@ class Parser(private val tokens: List<Token>) {
              weight = consume(TokenType.NUMBER, "Expected weight").literal.toDouble()
         }
         return Association(from, to, weight)
+    }
+
+    private fun parseConstDecl(): ConstDecl {
+        consume(TokenType.KEYWORD_CONST, "Expected 'const'")
+        val name = consume(TokenType.IDENTIFIER, "Const Name").literal
+        consume(TokenType.EQ, "=") 
+        val value = parseExpression()
+        return ConstDecl(name, value)
+    }
+
+    private fun parseVarDecl(): VarDecl {
+        consume(TokenType.KEYWORD_LET, "Expected 'let'")
+        val name = consume(TokenType.IDENTIFIER, "Var Name").literal
+        var value: Expr? = null
+        consume(TokenType.EQ, "=") 
+        value = parseExpression()
+        return VarDecl(name, value)
     }
 
     private fun parseRule(): Rule {
@@ -181,7 +200,9 @@ class Parser(private val tokens: List<Token>) {
         consume(TokenType.KEYWORD_EGO, "Expected 'ego'")
         consume(TokenType.LBRACE, "{")
         while (!check(TokenType.RBRACE) && !isAtEnd()) {
-            if (match(TokenType.KEYWORD_SELECT)) {
+            if (match(TokenType.KEYWORD_FUN)) {
+                block.functions.add(parseFunctionDecl())
+            } else if (match(TokenType.KEYWORD_SELECT)) {
                 // select top 5
                 val strat = if(match(TokenType.KEYWORD_TOP)) "top" else if(match(TokenType.KEYWORD_SAMPLE)) "sample" else "top"
                 val param = consume(TokenType.NUMBER, "count").literal.toInt()
@@ -199,6 +220,50 @@ class Parser(private val tokens: List<Token>) {
             }
         }
         consume(TokenType.RBRACE, "}")
+    }
+    
+    private fun parseFunctionDecl(): FunctionDecl {
+        val name = consume(TokenType.IDENTIFIER, "Function Name").literal
+        consume(TokenType.LPAREN, "(")
+        val params = mutableListOf<ParamDecl>()
+        if (!check(TokenType.RPAREN)) {
+            do {
+                // Simplified param parsing for ego functions (typing optional?)
+                // Using existing ParamDecl(name, type)
+                val argName = consume(TokenType.IDENTIFIER, "Arg").literal
+                val argType = if(match(TokenType.COLON)) consumeType() else "Any"
+                params.add(ParamDecl(argName, argType))
+            } while(match(TokenType.COMMA))
+        }
+        consume(TokenType.RPAREN, ")")
+        
+        consume(TokenType.LBRACE, "{")
+        val body = mutableListOf<Statement>()
+        while (!check(TokenType.RBRACE) && !isAtEnd()) {
+            body.add(parseStatement())
+        }
+        consume(TokenType.RBRACE, "}")
+        return FunctionDecl(name, params, body)
+    }
+
+    private fun parseStatement(): Statement {
+        if (match(TokenType.KEYWORD_RETURN)) {
+            val value = parseExpression()
+            return Statement.Return(value)
+        }
+        if (match(TokenType.KEYWORD_LET)) {
+             val name = consume(TokenType.IDENTIFIER, "Var Name").literal
+             var init: Expr? = null
+             if (match(TokenType.EQ)) {
+                 init = parseExpression()
+             }
+             return Statement.Var(name, init)
+        }
+        // If not specific statement, assume Expression or Assignment
+        val expr = parseExpression()
+        // Check if assignment (requires Lexer fix for '=')
+        // For now, return Expression.
+        return Statement.Expression(expr)
     }
 
     // --- ACT BLOCK ---
@@ -228,6 +293,7 @@ class Parser(private val tokens: List<Token>) {
                 }
                 TokenType.KEYWORD_ACTION -> block.actions.add(parseActionDecl())
                 TokenType.KEYWORD_RENDER -> block.renders.add(parseRenderDecl())
+                TokenType.KEYWORD_CONTRACT -> block.contracts.add(parseContractDecl())
                 TokenType.KEYWORD_PATTERN -> parsePattern(block)
                 else -> advance()
             }
@@ -318,6 +384,41 @@ class Parser(private val tokens: List<Token>) {
         }
         consume(TokenType.RBRACE, "}")
         return RepoDecl(name, entity, idType, methods)
+    }
+
+    private fun parseContractDecl(): ContractDecl {
+        consume(TokenType.KEYWORD_CONTRACT, "Expected 'contract'")
+        val name = consumeName("Contract Name")
+        
+        val generics = mutableListOf<String>()
+        if (match(TokenType.LT)) {
+            do {
+                generics.add(consume(TokenType.IDENTIFIER, "Generic Param").literal)
+            } while (match(TokenType.COMMA))
+            consume(TokenType.GT, ">")
+        }
+
+        consume(TokenType.LBRACE, "{")
+        val methods = mutableListOf<RepoMethod>()
+        while (match(TokenType.KEYWORD_FUN)) {
+             val mName = consume(TokenType.IDENTIFIER, "Method Name").literal
+             consume(TokenType.LPAREN, "(")
+             val args = mutableListOf<FieldDecl>()
+             if (!check(TokenType.RPAREN)) {
+                 do {
+                     val argName = consume(TokenType.IDENTIFIER, "Arg").literal
+                     consume(TokenType.COLON, ":")
+                     val argType = consumeType()
+                     args.add(FieldDecl(argName, argType))
+                 } while(match(TokenType.COMMA))
+             }
+             consume(TokenType.RPAREN, ")")
+             consume(TokenType.COLON, ":")
+             val ret = consumeType()
+             methods.add(RepoMethod(mName, args, ret))
+        }
+        consume(TokenType.RBRACE, "}")
+        return ContractDecl(name, generics, methods)
     }
 
     private fun parseFieldDecl(): FieldDecl {
@@ -637,6 +738,14 @@ class Parser(private val tokens: List<Token>) {
           }
           consume(TokenType.RPAREN, ")")
 
+          
+          val impls = mutableListOf<String>()
+          if (match(TokenType.KEYWORD_IMPLEMENTS)) {
+              do {
+                   impls.add(consumeName("Interface"))
+              } while (match(TokenType.COMMA))
+          }
+
           if (check(TokenType.LBRACE)) {
               // Definition
               val params = args.map { 
@@ -647,7 +756,7 @@ class Parser(private val tokens: List<Token>) {
               consume(TokenType.LBRACE, "{")
               parseActContent(body)
               consume(TokenType.RBRACE, "}")
-              block.patternDefs.add(PatternDef(name, params, body))
+              block.patternDefs.add(PatternDef(name, params, body, impls))
           } else {
               // Usage
               block.patternUsages.add(PatternUsage(name, args))

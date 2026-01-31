@@ -1,0 +1,43 @@
+
+// Contract for an entity that can be authenticated
+contract Identifiable {
+    fun getId(): UUID
+    fun getUsername(): String
+    fun getPassword(): String
+}
+
+pattern StandardAuth(User) {
+    
+    // Core Role Entity
+    entity Role {
+        id: UUID
+        name: String @unique
+    }
+    
+    // Link User to Roles (Many-to-Many)
+    entity "${User}Role" table "${User}_roles" {
+        user_id: UUID
+        role_id: UUID
+    }
+
+    // Auth DTOs
+    dto LoginRequest {
+        username: String
+        password: String
+    }
+
+    dto AuthResponse {
+        token: String
+        expiresIn: Int
+    }
+
+    // Login Action
+    action "${User}.login"(req: LoginRequest) returns AuthResponse
+        bind repo "${User}Repo".findByUsername(req.username)
+        // In a real pure implementation, we would bind checks here.
+        // For now, valid structure.
+
+    http {
+        on POST "/auth/login" as intent("${User}.login") body LoginRequest returns AuthResponse
+    }
+}

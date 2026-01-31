@@ -1,0 +1,366 @@
+# ============================================================================
+# Somnia Core Library - Dependencies Parser
+# Pure Somnia dependency management (equivalent to build.gradle/pom.xml)
+# ============================================================================
+
+# ============================================================================
+# DEPENDENCY MODEL
+# ============================================================================
+
+class Dependency {
+    field name: string
+    field version: string
+    field source: string       # "local", "registry", "git"
+    field path: string         # Local path or URL
+    field optional: bool
+    
+    method to_string() -> string {
+        return self.name + "@" + self.version
+    }
+    
+    method matches(name: string, version: string) -> bool {
+        when self.name != name => return false
+        # TODO: semver matching
+        return self.version == version or version == "*"
+    }
+}
+
+class DependencyGroup {
+    field name: string         # "main", "dev", "test"
+    field dependencies: list
+    
+    method add(dep: Dependency) {
+        self.dependencies = self.dependencies + [dep]
+    }
+    
+    method find(name: string) -> Dependency {
+        for dep in self.dependencies {
+            when dep.name == name => return dep
+        }
+        return null
+    }
+    
+    method has(name: string) -> bool {
+        return self.find(name) != null
+    }
+}
+
+class DepsManifest {
+    field project_name: string
+    field version: string
+    field main: DependencyGroup
+    field dev: DependencyGroup
+    field test: DependencyGroup
+    
+    method all_dependencies() -> list {
+        var all = []
+        for dep in self.main.dependencies {
+            all = all + [dep]
+        }
+        for dep in self.dev.dependencies {
+            all = all + [dep]
+        }
+        for dep in self.test.dependencies {
+            all = all + [dep]
+        }
+        return all
+    }
+    
+    method find(name: string) -> Dependency {
+        var dep = self.main.find(name)
+        when dep != null => return dep
+        
+        dep = self.dev.find(name)
+        when dep != null => return dep
+        
+        return self.test.find(name)
+    }
+}
+
+# ============================================================================
+# DEPS PARSER - Parses somnia.deps files
+# ============================================================================
+
+class DepsParser {
+    field input: string
+    field position: number
+    field line: number
+    
+    method parse() -> DepsManifest {
+        var project_name = "unnamed"
+        var version = "0.0.0"
+        var main_deps = DependencyGroup { name: "main", dependencies: [] }
+        var dev_deps = DependencyGroup { name: "dev", dependencies: [] }
+        var test_deps = DependencyGroup { name: "test", dependencies: [] }
+        var current_group = main_deps
+        
+        while self.position < len(self.input) {
+            self.skip_whitespace()
+            
+            when self.position >= len(self.input) => break
+            
+            var char = self.peek()
+            
+            # Skip comments
+            when char == "#" => {
+                self.skip_line()
+                continue
+            }
+            
+            # Parse deps block
+            when self.match_word("deps") => {
+                self.skip_whitespace()
+                project_name = self.parse_identifier()
+                self.skip_whitespace()
+                self.expect("{")
+                current_group = main_deps
+            }
+            
+            # Parse require statement
+            when self.match_word("require") => {
+                var dep = self.parse_require()
+                current_group.add(dep)
+            }
+            
+            # Parse dev block
+            when self.match_word("dev") => {
+                self.skip_whitespace()
+                self.expect("{")
+                current_group = dev_deps
+            }
+            
+            # Parse test block
+            when self.match_word("test") => {
+                self.skip_whitespace()
+                self.expect("{")
+                current_group = test_deps
+            }
+            
+            # Parse version
+            when self.match_word("version") => {
+                self.skip_whitespace()
+                version = self.parse_string()
+            }
+            
+            # Close block
+            when char == "}" => {
+                self.advance()
+                current_group = main_deps
+            }
+            
+            default => self.advance()
+        }
+        
+        return DepsManifest {
+            project_name: project_name,
+            version: version,
+            main: main_deps,
+            dev: dev_deps,
+            test: test_deps
+        }
+    }
+    
+    method parse_require() -> Dependency {
+        self.skip_whitespace()
+        var name = self.parse_string()
+        var version = "*"
+        var source = "registry"
+        var path = ""
+        var optional = false
+        
+        self.skip_whitespace()
+        
+        # Parse modifiers
+        while self.position < len(self.input) {
+            self.skip_whitespace()
+            
+            when self.match_word("version") => {
+                self.skip_whitespace()
+                version = self.parse_string()
+            }
+            
+            when self.match_word("from") => {
+                self.skip_whitespace()
+                path = self.parse_string()
+                source = "local"
+            }
+            
+            when self.match_word("git") => {
+                self.skip_whitespace()
+                path = self.parse_string()
+                source = "git"
+            }
+            
+            when self.match_word("optional") => {
+                optional = true
+            }
+            
+            default => break
+        }
+        
+        return Dependency {
+            name: name,
+            version: version,
+            source: source,
+            path: path,
+            optional: optional
+        }
+    }
+    
+    method parse_string() -> string {
+        self.skip_whitespace()
+        self.expect("\"")
+        var result = ""
+        
+        while self.position < len(self.input) and self.peek() != "\"" {
+            result = result + self.peek()
+            self.advance()
+        }
+        
+        self.expect("\"")
+        return result
+    }
+    
+    method parse_identifier() -> string {
+        var start = self.position
+        
+        while self.position < len(self.input) {
+            var char = self.peek()
+            when not (self.is_letter(char) or self.is_digit(char) or char == "_" or char == "-") => break
+            self.advance()
+        }
+        
+        return string_substring(self.input, start, self.position)
+    }
+    
+    # Helper methods
+    method peek() -> string {
+        when self.position >= len(self.input) => return ""
+        return string_substring(self.input, self.position, self.position + 1)
+    }
+    
+    method advance() {
+        when self.position < len(self.input) => {
+            when self.peek() == "\n" => self.line = self.line + 1
+            self.position = self.position + 1
+        }
+    }
+    
+    method expect(char: string) {
+        when self.peek() == char => self.advance()
+    }
+    
+    method match_word(word: string) -> bool {
+        var end_pos = self.position + len(word)
+        when end_pos > len(self.input) => return false
+        
+        var substr = string_substring(self.input, self.position, end_pos)
+        when substr == word => {
+            self.position = end_pos
+            return true
+        }
+        return false
+    }
+    
+    method skip_whitespace() {
+        while self.position < len(self.input) {
+            var char = self.peek()
+            when char == " " or char == "\t" or char == "\n" or char == "\r" => {
+                when char == "\n" => self.line = self.line + 1
+                self.advance()
+            }
+            default => break
+        }
+    }
+    
+    method skip_line() {
+        while self.position < len(self.input) and self.peek() != "\n" {
+            self.advance()
+        }
+        when self.peek() == "\n" => self.advance()
+    }
+    
+    method is_digit(char: string) -> bool {
+        return char >= "0" and char <= "9"
+    }
+    
+    method is_letter(char: string) -> bool {
+        return (char >= "a" and char <= "z") or (char >= "A" and char <= "Z")
+    }
+}
+
+# ============================================================================
+# FACTORY FUNCTIONS
+# ============================================================================
+
+fun parse_deps(input: string) -> DepsManifest {
+    var parser = DepsParser { input: input, position: 0, line: 1 }
+    return parser.parse()
+}
+
+fun load_deps(path: string) -> DepsManifest {
+    var content = native_read_file(path)
+    return parse_deps(content)
+}
+
+# ============================================================================
+# DEPENDENCY RESOLVER
+# ============================================================================
+
+class DependencyResolver {
+    field manifest: DepsManifest
+    field resolved: map
+    field base_path: string
+    
+    method resolve_all() -> list {
+        var resolved_deps = []
+        
+        for dep in self.manifest.all_dependencies() {
+            var resolved = self.resolve(dep)
+            when resolved != null => {
+                resolved_deps = resolved_deps + [resolved]
+            }
+        }
+        
+        return resolved_deps
+    }
+    
+    method resolve(dep: Dependency) -> Dependency {
+        when dep.source == "local" => {
+            # Resolve local dependency
+            var full_path = self.base_path + "/" + dep.path
+            dep.path = full_path
+            return dep
+        }
+        
+        when dep.source == "registry" => {
+            # TODO: Registry lookup
+            return dep
+        }
+        
+        return dep
+    }
+}
+
+fun create_resolver(manifest: DepsManifest, base_path: string) -> DependencyResolver {
+    return DependencyResolver {
+        manifest: manifest,
+        resolved: {},
+        base_path: base_path
+    }
+}
+
+# ============================================================================
+# EXPORTS
+# ============================================================================
+
+export { 
+    Dependency, 
+    DependencyGroup, 
+    DepsManifest, 
+    DepsParser, 
+    DependencyResolver,
+    parse_deps, 
+    load_deps,
+    create_resolver
+}

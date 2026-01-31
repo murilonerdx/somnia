@@ -26,7 +26,9 @@ sealed class Expr {
 data class IdBlock(
     val declarations: MutableList<Declaration> = mutableListOf(),
     val associations: MutableList<Association> = mutableListOf(),
-    val rules: MutableList<Rule> = mutableListOf()
+    val rules: MutableList<Rule> = mutableListOf(),
+    val consts: MutableList<ConstDecl> = mutableListOf(),
+    val vars: MutableList<VarDecl> = mutableListOf()
 )
 
 data class Declaration(val kind: String, val name: String, val weight: Double, val params: List<String> = listOf())
@@ -44,10 +46,24 @@ data class AndCondition(val left: Condition, val right: Condition) : Condition()
 
 data class ProposalTemplate(val name: String, val args: List<Expr>, val probability: Double = 1.0)
 
+data class ConstDecl(val name: String, val value: Expr)
+data class VarDecl(val name: String, val value: Expr?)
+
 // --- EGO Layer ---
 data class EgoBlock(
-    val commands: MutableList<EgoCommand> = mutableListOf()
+    val commands: MutableList<EgoCommand> = mutableListOf(),
+    val functions: MutableList<FunctionDecl> = mutableListOf()
 )
+
+data class FunctionDecl(val name: String, val params: List<ParamDecl>, val body: List<Statement>)
+
+sealed class Statement {
+    data class Return(val value: Expr) : Statement()
+    data class If(val condition: Expr, val thenBranch: List<Statement>, val elseBranch: List<Statement>?) : Statement()
+    data class Var(val name: String, val initializer: Expr?) : Statement()
+    data class Assign(val name: String, val value: Expr) : Statement()
+    data class Expression(val expr: Expr) : Statement()
+}
 
 sealed class EgoCommand {
     data class AttentionCommand(val budget: Double) : EgoCommand()
@@ -72,6 +88,7 @@ data class ActBlock(
     val intents: MutableList<String> = mutableListOf(),
     val actions: MutableList<ActionDecl> = mutableListOf(),
     val renders: MutableList<RenderDecl> = mutableListOf(),
+    val contracts: MutableList<ContractDecl> = mutableListOf(),
     val patternDefs: MutableList<PatternDef> = mutableListOf(),
     val patternUsages: MutableList<PatternUsage> = mutableListOf(),
     
@@ -143,7 +160,8 @@ sealed class ActionBinding {
 }
 
 data class RenderDecl(val intent: String, val logic: Expr)
-data class PatternDef(val name: String, val params: List<String>, val body: ActBlock)
+data class ContractDecl(val name: String, val generics: List<String>, val methods: List<RepoMethod>)
+data class PatternDef(val name: String, val params: List<String>, val body: ActBlock, val implements: List<String> = listOf())
 data class PatternUsage(val name: String, val args: List<Expr>)
 
 data class KafkaDecl(val brokersRef: String, val topics: List<TopicDecl>)

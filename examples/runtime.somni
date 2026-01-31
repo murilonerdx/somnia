@@ -1,0 +1,72 @@
+# ====================================
+# Somnia Language: Runtime & Memory
+# Author: Somnia Team
+# ====================================
+#
+# This example demonstrates runtime introspection.
+# Uses std/runtime for GC insights and system info.
+
+ID {
+    const appName = "Memory Monitor"
+    var memUsed = 0
+    var memTotal = 0
+}
+
+EGO {
+    fun systemInfo() {
+        println("[System] Information:")
+        println("  Somnia Version:", version())
+        println("  OS:", osName())
+        println("  Java Version:", javaVersion())
+        println("  Processors:", processors())
+    }
+    
+    fun memoryInfo() {
+        memUsed = memoryUsed()
+        memTotal = memoryTotal()
+        
+        println("[Memory] Status:")
+        println("  Used:", memUsed / 1024 / 1024, "MB")
+        println("  Total:", memTotal / 1024 / 1024, "MB")
+        println("  Free:", memoryFree() / 1024 / 1024, "MB")
+        println("  Max:", memoryMax() / 1024 / 1024, "MB")
+    }
+    
+    fun runGC() {
+        println("[GC] Running garbage collection...")
+        var before = memoryUsed()
+        gcRun()
+        var after = memoryUsed()
+        println("[GC] Freed:", (before - after) / 1024, "KB")
+    }
+    
+    fun benchmark() {
+        println("[Benchmark] Starting performance test...")
+        var startTime = nanos()
+        
+        # Do some work
+        var i = 0
+        var result = 0
+        # Note: loops are future feature
+        result = pow(2, 20)
+        
+        var endTime = elapsed(startTime)
+        println("[Benchmark] Completed in", endTime, "ms")
+        println("[Benchmark] Result:", result)
+    }
+}
+
+ACT {
+    action main {
+        println("=== Somnia Runtime Demo ===")
+        systemInfo()
+        println("")
+        memoryInfo()
+        println("")
+        runGC()
+        memoryInfo()
+        println("")
+        benchmark()
+        println("=== Done ===")
+    }
+}

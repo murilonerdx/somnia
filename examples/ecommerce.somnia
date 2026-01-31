@@ -1,0 +1,442 @@
+// ============================================================================
+// E-Commerce REST API - Pure Somnia
+// Shopping cart, products, and orders
+// ============================================================================
+
+app "ecommerce-api" {
+    package "com.somnia.ecommerce"
+    spring boot "3.2.0"
+}
+
+act {
+    // =========================================================================
+    // Entities
+    // =========================================================================
+    
+    entity Product table "products" {
+        id: UUID
+        name: String
+        description: String
+        price: Double
+        stock: Integer
+        category: String
+        imageUrl: String
+        active: Boolean
+        createdAt: Timestamp
+    }
+    
+    entity CartItem table "cart_items" {
+        id: UUID
+        userId: UUID
+        productId: UUID
+        quantity: Integer
+        price: Double
+        createdAt: Timestamp
+    }
+    
+    entity Order table "orders" {
+        id: UUID
+        userId: UUID
+        subtotal: Double
+        tax: Double
+        shipping: Double
+        total: Double
+        status: String
+        shippingAddress: Json
+        createdAt: Timestamp
+    }
+    
+    entity OrderItem table "order_items" {
+        id: UUID
+        orderId: UUID
+        productId: UUID
+        productName: String
+        quantity: Integer
+        price: Double
+    }
+    
+    // =========================================================================
+    // DTOs
+    // =========================================================================
+    
+    dto CreateProductRequest {
+        name: String
+        description: String
+        price: Double
+        stock: Integer
+        category: String
+        imageUrl: String
+    }
+    
+    dto AddToCartRequest {
+        productId: UUID
+        quantity: Integer
+    }
+    
+    dto UpdateCartItemRequest {
+        quantity: Integer
+    }
+    
+    dto CheckoutRequest {
+        shippingAddress: Json
+    }
+    
+    dto UpdateOrderStatusRequest {
+        status: String
+    }
+    
+    // =========================================================================
+    // Repositories
+    // =========================================================================
+    
+    repository ProductRepository : jpa <com.somnia.ecommerce.model.Product, UUID> {
+        fun save(p: com.somnia.ecommerce.model.Product): com.somnia.ecommerce.model.Product
+        fun findAll(): List
+        fun findById(id: UUID): com.somnia.ecommerce.model.Product
+        fun findByCategory(category: String): List
+        fun deleteById(id: UUID): Void
+    }
+    
+    repository CartItemRepository : jpa <com.somnia.ecommerce.model.CartItem, UUID> {
+        fun save(item: com.somnia.ecommerce.model.CartItem): com.somnia.ecommerce.model.CartItem
+        fun findByUserId(userId: UUID): List
+        fun findByUserIdAndProductId(userId: UUID, productId: UUID): com.somnia.ecommerce.model.CartItem
+        fun deleteById(id: UUID): Void
+        fun deleteByUserId(userId: UUID): Void
+    }
+    
+    repository OrderRepository : jpa <com.somnia.ecommerce.model.Order, UUID> {
+        fun save(order: com.somnia.ecommerce.model.Order): com.somnia.ecommerce.model.Order
+        fun findById(id: UUID): com.somnia.ecommerce.model.Order
+        fun findByUserId(userId: UUID): List
+    }
+    
+    repository OrderItemRepository : jpa <com.somnia.ecommerce.model.OrderItem, UUID> {
+        fun save(item: com.somnia.ecommerce.model.OrderItem): com.somnia.ecommerce.model.OrderItem
+        fun findByOrderId(orderId: UUID): List
+    }
+    
+    // =========================================================================
+    // HTTP Endpoints
+    // =========================================================================
+    
+    http {
+        base "/api"
+        
+        // Products
+        on GET "/products" as intent("products.list")
+        on GET "/products/{productId}" as intent("products.get")
+            args { productId: UUID }
+        on POST "/products" as intent("products.create")
+            auth required
+            body com.somnia.ecommerce.dto.CreateProductRequest
+        on PUT "/products/{productId}" as intent("products.update")
+            auth required
+            args { productId: UUID }
+            body com.somnia.ecommerce.dto.CreateProductRequest
+        on DELETE "/products/{productId}" as intent("products.delete")
+            auth required
+            args { productId: UUID }
+            
+        // Categories
+        on GET "/categories" as intent("categories.list")
+        
+        // Cart
+        on GET "/cart" as intent("cart.get")
+            auth required
+        on POST "/cart/items" as intent("cart.add")
+            auth required
+            body com.somnia.ecommerce.dto.AddToCartRequest
+        on PUT "/cart/items/{productId}" as intent("cart.update")
+            auth required
+            args { productId: UUID }
+            body com.somnia.ecommerce.dto.UpdateCartItemRequest
+        on DELETE "/cart/items/{productId}" as intent("cart.remove")
+            auth required
+            args { productId: UUID }
+        on DELETE "/cart" as intent("cart.clear")
+            auth required
+            
+        // Checkout & Orders
+        on POST "/checkout" as intent("checkout")
+            auth required
+            body com.somnia.ecommerce.dto.CheckoutRequest
+        on GET "/orders" as intent("orders.list")
+            auth required
+        on GET "/orders/{orderId}" as intent("orders.get")
+            auth required
+            args { orderId: UUID }
+        on PUT "/orders/{orderId}/status" as intent("orders.updateStatus")
+            auth required
+            args { orderId: UUID }
+            body com.somnia.ecommerce.dto.UpdateOrderStatusRequest
+            
+        // Health
+        on GET "/health" as intent("health")
+    }
+    
+    // =========================================================================
+    // Security
+    // =========================================================================
+    
+    security {
+        jwt {
+            secret "${JWT_SECRET:ecommerce-secret-2024}"
+            expiration 86400
+        }
+        
+        rules {
+            allow "products.list" requires valid
+            allow "products.get" requires valid
+            allow "categories.list" requires valid
+            allow "products.create" requires roles("ADMIN")
+            allow "products.update" requires roles("ADMIN")
+            allow "products.delete" requires roles("ADMIN")
+            allow "cart.*" requires valid
+            allow "checkout" requires valid
+            allow "orders.*" requires valid
+            allow "orders.updateStatus" requires roles("ADMIN")
+            allow "health" requires valid
+        }
+    }
+    
+    // =========================================================================
+    // Actions
+    // =========================================================================
+    
+    action products.list() returns Json
+        bind sql "SELECT * FROM products WHERE active = true ORDER BY name"
+        
+    action products.get(productId: UUID) returns com.somnia.ecommerce.model.Product
+        bind repo ProductRepository.findById(productId)
+        fail status(404) "Product not found"
+        
+    action products.create(req: com.somnia.ecommerce.dto.CreateProductRequest) permission("admin") returns com.somnia.ecommerce.model.Product
+        bind tx required {
+            bind repo ProductRepository.save({
+                "name": req.name,
+                "description": req.description,
+                "price": req.price,
+                "stock": req.stock,
+                "category": req.category,
+                "imageUrl": req.imageUrl,
+                "active": true,
+                "createdAt": now()
+            })
+        }
+        
+    action products.update(productId: UUID, req: com.somnia.ecommerce.dto.CreateProductRequest) permission("admin") returns com.somnia.ecommerce.model.Product
+        bind tx required {
+            bind repo ProductRepository.findById(productId) then {
+                result.name = req.name
+                result.description = req.description
+                result.price = req.price
+                result.stock = req.stock
+                result.category = req.category
+                result.imageUrl = req.imageUrl
+                bind repo ProductRepository.save(result)
+            }
+        }
+        fail status(404) "Product not found"
+        
+    action products.delete(productId: UUID) permission("admin") returns Json
+        bind tx required {
+            bind repo ProductRepository.findById(productId) then {
+                result.active = false
+                bind repo ProductRepository.save(result)
+                return { "message": "Product deleted" }
+            }
+        }
+        fail status(404) "Product not found"
+        
+    action categories.list() returns Json
+        bind sql "SELECT DISTINCT category, COUNT(*) as count FROM products WHERE active = true GROUP BY category ORDER BY category"
+        
+    action cart.get() returns Json
+        bind repo CartItemRepository.findByUserId(currentUser.id) then {
+            let total = 0
+            let items = []
+            for item in result {
+                let product = bind repo ProductRepository.findById(item.productId)
+                let itemTotal = item.price * item.quantity
+                total = total + itemTotal
+                items = items + [{
+                    "productId": item.productId,
+                    "productName": product.name,
+                    "quantity": item.quantity,
+                    "price": item.price,
+                    "total": itemTotal
+                }]
+            }
+            return {
+                "items": items,
+                "itemCount": len(items),
+                "total": total
+            }
+        }
+        
+    action cart.add(req: com.somnia.ecommerce.dto.AddToCartRequest) returns Json
+        bind tx required {
+            bind repo ProductRepository.findById(req.productId) then {
+                if (result.stock < req.quantity) {
+                    fail status(400) "Insufficient stock"
+                }
+                
+                // Check if already in cart
+                let existing = bind repo CartItemRepository.findByUserIdAndProductId(currentUser.id, req.productId)
+                if (existing != null) {
+                    existing.quantity = existing.quantity + req.quantity
+                    bind repo CartItemRepository.save(existing)
+                } else {
+                    bind repo CartItemRepository.save({
+                        "userId": currentUser.id,
+                        "productId": req.productId,
+                        "quantity": req.quantity,
+                        "price": result.price,
+                        "createdAt": now()
+                    })
+                }
+                
+                return cart.get()
+            }
+        }
+        fail status(404) "Product not found"
+        
+    action cart.update(productId: UUID, req: com.somnia.ecommerce.dto.UpdateCartItemRequest) returns Json
+        bind tx required {
+            bind repo CartItemRepository.findByUserIdAndProductId(currentUser.id, productId) then {
+                if (req.quantity <= 0) {
+                    bind repo CartItemRepository.deleteById(result.id)
+                } else {
+                    result.quantity = req.quantity
+                    bind repo CartItemRepository.save(result)
+                }
+                return cart.get()
+            }
+        }
+        fail status(404) "Item not in cart"
+        
+    action cart.remove(productId: UUID) returns Json
+        bind tx required {
+            bind repo CartItemRepository.findByUserIdAndProductId(currentUser.id, productId) then {
+                bind repo CartItemRepository.deleteById(result.id)
+                return cart.get()
+            }
+        }
+        fail status(404) "Item not in cart"
+        
+    action cart.clear() returns Json
+        bind tx required {
+            bind repo CartItemRepository.deleteByUserId(currentUser.id)
+            return { "message": "Cart cleared" }
+        }
+        
+    action checkout(req: com.somnia.ecommerce.dto.CheckoutRequest) returns com.somnia.ecommerce.model.Order
+        bind tx required {
+            let cartItems = bind repo CartItemRepository.findByUserId(currentUser.id)
+            
+            if (len(cartItems) == 0) {
+                fail status(400) "Cart is empty"
+            }
+            
+            let subtotal = 0
+            let orderItems = []
+            
+            for item in cartItems {
+                let product = bind repo ProductRepository.findById(item.productId)
+                
+                if (product.stock < item.quantity) {
+                    fail status(400) "Insufficient stock for " + product.name
+                }
+                
+                let itemTotal = item.price * item.quantity
+                subtotal = subtotal + itemTotal
+                
+                // Reduce stock
+                product.stock = product.stock - item.quantity
+                bind repo ProductRepository.save(product)
+                
+                orderItems = orderItems + [{
+                    "productId": item.productId,
+                    "productName": product.name,
+                    "quantity": item.quantity,
+                    "price": item.price
+                }]
+            }
+            
+            let tax = subtotal * 0.1
+            let shipping = if subtotal >= 100 then 0 else 9.99
+            let total = subtotal + tax + shipping
+            
+            let order = bind repo OrderRepository.save({
+                "userId": currentUser.id,
+                "subtotal": subtotal,
+                "tax": tax,
+                "shipping": shipping,
+                "total": total,
+                "status": "PENDING",
+                "shippingAddress": req.shippingAddress,
+                "createdAt": now()
+            })
+            
+            // Save order items
+            for item in orderItems {
+                bind repo OrderItemRepository.save({
+                    "orderId": order.id,
+                    "productId": item.productId,
+                    "productName": item.productName,
+                    "quantity": item.quantity,
+                    "price": item.price
+                })
+            }
+            
+            // Clear cart
+            bind repo CartItemRepository.deleteByUserId(currentUser.id)
+            
+            return order
+        }
+        
+    action orders.list() returns Json
+        bind repo OrderRepository.findByUserId(currentUser.id)
+        
+    action orders.get(orderId: UUID) returns Json
+        bind repo OrderRepository.findById(orderId) then {
+            let items = bind repo OrderItemRepository.findByOrderId(orderId)
+            return {
+                "order": result,
+                "items": items
+            }
+        }
+        fail status(404) "Order not found"
+        
+    action orders.updateStatus(orderId: UUID, req: com.somnia.ecommerce.dto.UpdateOrderStatusRequest) permission("admin") returns com.somnia.ecommerce.model.Order
+        bind tx required {
+            bind repo OrderRepository.findById(orderId) then {
+                result.status = req.status
+                bind repo OrderRepository.save(result)
+            }
+        }
+        fail status(404) "Order not found"
+        
+    action health() returns Json
+        bind {
+            return {
+                "status": "healthy",
+                "service": "E-Commerce API",
+                "version": "1.0.0"
+            }
+        }
+        
+    // Renders
+    render products.list {
+        products.list
+    }
+    
+    render cart.get {
+        cart.get
+    }
+    
+    render orders.list {
+        orders.list
+    }
+}

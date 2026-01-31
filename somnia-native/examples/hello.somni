@@ -1,0 +1,40 @@
+# Hello World - Somnia Native
+# The simplest program to test the VM
+
+println "Hello, World!"
+println "Welcome to Somnia - The Cognitive Language"
+
+# Variables
+var x = 10
+var y = 20
+var sum = x + y
+
+println "Sum: " + sum
+
+# Functions
+fun greet(name) {
+    println "Hello, " + name + "!"
+}
+
+greet("Somnia")
+greet("Developer")
+
+# Control flow
+var counter = 0
+while counter < 5 {
+    println "Count: " + counter
+    counter = counter + 1
+}
+
+# Math operations
+println "10 * 5 = " + (10 * 5)
+println "100 / 4 = " + (100 / 4)
+println "17 % 5 = " + (17 % 5)
+
+# Boolean logic
+var isReady = true
+if isReady {
+    println "System is ready!"
+}
+
+println "=== End of Hello World ==="

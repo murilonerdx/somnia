@@ -1,0 +1,67 @@
+// ============================================================================
+// Notes API - Pure Somnia REST Service
+// Simple CRUD for notes/memos
+// ============================================================================
+
+app "notes-api" {
+    package "com.somnia.notes"
+    spring boot "3.2.0"
+}
+
+act {
+    entity Note table "notes" {
+        id: UUID
+        title: String
+        content: String
+        createdAt: Timestamp
+        updatedAt: Timestamp
+    }
+    
+    dto CreateNoteRequest {
+        title: String
+        content: String
+    }
+    
+    repository NoteRepository : jpa <com.somnia.notes.model.Note, UUID> {
+        fun save(note: com.somnia.notes.model.Note): com.somnia.notes.model.Note
+        fun findAll(): List
+        fun findById(id: UUID): com.somnia.notes.model.Note
+        fun deleteById(id: UUID): Void
+    }
+    
+    http {
+        base "/api"
+        on POST "/notes" as intent("notes.create")
+            body com.somnia.notes.dto.CreateNoteRequest
+        on GET "/notes" as intent("notes.list")
+        on GET "/notes/{noteId}" as intent("notes.get")
+            args { noteId: UUID }
+        on DELETE "/notes/{noteId}" as intent("notes.delete")
+            args { noteId: UUID }
+    }
+    
+    action notes.create(req: com.somnia.notes.dto.CreateNoteRequest) permission("db.write") returns com.somnia.notes.model.Note
+        bind tx required {
+            bind repo NoteRepository.save({
+                "title": req.title,
+                "content": req.content
+            })
+        }
+        
+    action notes.list() permission("db.read") returns Json
+        bind sql "SELECT id, title, content, created_at FROM notes ORDER BY created_at DESC"
+        
+    action notes.get(noteId: UUID) permission("db.read") returns com.somnia.notes.model.Note
+        bind repo NoteRepository.findById(noteId)
+        
+    action notes.delete(noteId: UUID) permission("db.write") returns Json
+        bind repo NoteRepository.deleteById(noteId)
+        
+    render notes.create {
+        notes.create
+    }
+    
+    render notes.list {
+        notes.list
+    }
+}

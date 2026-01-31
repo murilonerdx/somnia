@@ -1,0 +1,73 @@
+# Somnia OOP Example - Complete Class Hierarchy
+# This demonstrates the full OOP capabilities
+
+class Animal {
+    var name = ""
+    var age = 0
+    
+    fun init(name, age) {
+        self.name = name
+        self.age = age
+    }
+    
+    fun speak() {
+        println self.name + " makes a sound"
+    }
+    
+    fun describe() {
+        println "I am " + self.name + ", " + self.age + " years old"
+    }
+}
+
+class Dog extends Animal {
+    var breed = ""
+    
+    fun init(name, age, breed) {
+        super.init(name, age)
+        self.breed = breed
+    }
+    
+    fun speak() {
+        println self.name + " barks: Woof!"
+    }
+    
+    fun fetch() {
+        println self.name + " fetches the ball"
+    }
+}
+
+class Cat extends Animal {
+    var indoor = true
+    
+    fun init(name, age, indoor) {
+        super.init(name, age)
+        self.indoor = indoor
+    }
+    
+    fun speak() {
+        println self.name + " meows: Meow!"
+    }
+    
+    fun purr() {
+        println self.name + " purrs contentedly"
+    }
+}
+
+# Main program
+println "=== Somnia OOP Demo ==="
+
+var dog = Dog("Rex", 5, "German Shepherd")
+var cat = Cat("Whiskers", 3, true)
+
+dog.describe()
+dog.speak()
+dog.fetch()
+
+println ""
+
+cat.describe()
+cat.speak()
+cat.purr()
+
+println ""
+println "=== Done ==="

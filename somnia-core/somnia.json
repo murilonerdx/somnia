@@ -1,0 +1,44 @@
+{
+    "name": "somnia-core",
+    "version": "1.0.0",
+    "description": "Self-hosted Somnia core library",
+    "main": "lib/index.somnia",
+    "files": [
+        "lib/types.somnia",
+        "lib/proposal.somnia",
+        "lib/condition.somnia",
+        "lib/context.somnia",
+        "lib/rule.somnia",
+        "lib/id_engine.somnia",
+        "lib/ego.somnia",
+        "lib/act.somnia",
+        "lib/runtime.somnia",
+        "lib/ffi.somnia",
+        "lib/natives.somnia",
+        "lib/index.somnia"
+    ],
+    "test": "test/test_runner.somnia",
+    "requires": [],
+    "capabilities": [
+        "core",
+        "id",
+        "ego",
+        "act",
+        "runtime"
+    ],
+    "exports": {
+        "Value": "lib/types.somnia",
+        "Intent": "lib/types.somnia",
+        "Fact": "lib/types.somnia",
+        "Drive": "lib/types.somnia",
+        "Affect": "lib/types.somnia",
+        "Proposal": "lib/proposal.somnia",
+        "Condition": "lib/condition.somnia",
+        "ExecutionContext": "lib/context.somnia",
+        "Rule": "lib/rule.somnia",
+        "IdEngine": "lib/id_engine.somnia",
+        "Ego": "lib/ego.somnia",
+        "Act": "lib/act.somnia",
+        "Runtime": "lib/runtime.somnia"
+    }
+}

@@ -1,0 +1,81 @@
+# ============================================================================
+# Somnia Core Library - Index
+# Main module that re-exports all core components
+# ============================================================================
+
+# Core types
+export * from "types.somnia"
+
+# Proposal system
+export * from "proposal.somnia"
+
+# Condition system
+export * from "condition.somnia"
+
+# Execution context
+export * from "context.somnia"
+
+# Rule definitions
+export * from "rule.somnia"
+
+# ID Engine (The Unconscious)
+export * from "id_engine.somnia"
+
+# EGO (The Subconscious)
+export * from "ego.somnia"
+
+# ACT (The Conscious)
+export * from "act.somnia"
+
+# Full Runtime
+export * from "runtime.somnia"
+
+# FFI Bridge
+export * from "ffi.somnia"
+
+# Native declarations
+export * from "natives.somnia"
+
+# Configuration system
+export * from "config.somnia"
+
+# Dependencies management
+export * from "deps.somnia"
+
+
+# ============================================================================
+# VERSION
+# ============================================================================
+
+const SOMNIA_VERSION = "1.0.0"
+const SOMNIA_VERSION_MAJOR = 1
+const SOMNIA_VERSION_MINOR = 0
+const SOMNIA_VERSION_PATCH = 0
+
+# ============================================================================
+# QUICK START
+# ============================================================================
+
+# Create a complete agent in one expression:
+#
+# var agent = RUNTIME()
+#     .with_id(ID()
+#         .drive("efficiency", 0.8)
+#         .add(rule("greet")
+#             .when_intent("greet")
+#             .propose("log")
+#             .with_args({ "message": value_string("Hello!") })
+#             .weight(0.9)
+#             .build())
+#         .build())
+#     .with_ego(EGO()
+#         .forbid_when(cond_fact("maintenance"), "System in maintenance")
+#         .budget("log", 100, 60)
+#         .select_top(1)
+#         .build())
+#     .with_act(ACT()
+#         .with_builtins()
+#         .build())
+#     .build()
+#
+# var result = agent.run_cycle(create_intent("greet", {}))

@@ -1,0 +1,372 @@
+# ============================================================================
+# Somnia Core Library - Condition
+# Self-hosted condition types for rule matching
+# ============================================================================
+
+import "types.somnia"
+
+# ============================================================================
+# CONDITION TYPE ENUM
+# ============================================================================
+
+const COND_INTENT = "intent"
+const COND_FACT = "fact"
+const COND_FACT_VALUE = "fact_value"
+const COND_DRIVE = "drive"
+const COND_AFFECT = "affect"
+const COND_AND = "and"
+const COND_OR = "or"
+const COND_NOT = "not"
+const COND_TRUE = "true"
+const COND_FALSE = "false"
+const COND_COMPARE = "compare"
+
+# ============================================================================
+# CONDITION - Base class for all conditions
+# ============================================================================
+
+class Condition {
+    field type: string
+    field data: map
+    
+    method evaluate(ctx: ExecutionContext) -> bool {
+        # Virtual dispatch based on type
+        when self.type == COND_INTENT => return eval_intent(self, ctx)
+        when self.type == COND_FACT => return eval_fact(self, ctx)
+        when self.type == COND_FACT_VALUE => return eval_fact_value(self, ctx)
+        when self.type == COND_DRIVE => return eval_drive(self, ctx)
+        when self.type == COND_AFFECT => return eval_affect(self, ctx)
+        when self.type == COND_AND => return eval_and(self, ctx)
+        when self.type == COND_OR => return eval_or(self, ctx)
+        when self.type == COND_NOT => return eval_not(self, ctx)
+        when self.type == COND_TRUE => return true
+        when self.type == COND_FALSE => return false
+        when self.type == COND_COMPARE => return eval_compare(self, ctx)
+        default => return false
+    }
+    
+    method to_string() -> string {
+        return "Condition(" + self.type + ")"
+    }
+}
+
+# ============================================================================
+# CONDITION FACTORIES
+# ============================================================================
+
+# intent("name") - Check if current intent matches
+fun cond_intent(name: string) -> Condition {
+    return Condition {
+        type: COND_INTENT,
+        data: { "name": name }
+    }
+}
+
+# fact("key") - Check if fact exists
+fun cond_fact(key: string) -> Condition {
+    return Condition {
+        type: COND_FACT,
+        data: { "key": key }
+    }
+}
+
+# fact("key") == value - Check if fact has specific value
+fun cond_fact_equals(key: string, expected: Value) -> Condition {
+    return Condition {
+        type: COND_FACT_VALUE,
+        data: { "key": key, "expected": expected }
+    }
+}
+
+# drive(name) > threshold - Check drive intensity
+fun cond_drive_gt(name: string, threshold: number) -> Condition {
+    return Condition {
+        type: COND_DRIVE,
+        data: { "name": name, "threshold": threshold, "operator": ">" }
+    }
+}
+
+fun cond_drive_lt(name: string, threshold: number) -> Condition {
+    return Condition {
+        type: COND_DRIVE,
+        data: { "name": name, "threshold": threshold, "operator": "<" }
+    }
+}
+
+# affect(name) > threshold - Check affect valence
+fun cond_affect_gt(name: string, threshold: number) -> Condition {
+    return Condition {
+        type: COND_AFFECT,
+        data: { "name": name, "threshold": threshold, "operator": ">" }
+    }
+}
+
+fun cond_affect_lt(name: string, threshold: number) -> Condition {
+    return Condition {
+        type: COND_AFFECT,
+        data: { "name": name, "threshold": threshold, "operator": "<" }
+    }
+}
+
+# cond1 and cond2 - Logical AND
+fun cond_and(left: Condition, right: Condition) -> Condition {
+    return Condition {
+        type: COND_AND,
+        data: { "left": left, "right": right }
+    }
+}
+
+# cond1 or cond2 - Logical OR
+fun cond_or(left: Condition, right: Condition) -> Condition {
+    return Condition {
+        type: COND_OR,
+        data: { "left": left, "right": right }
+    }
+}
+
+# not cond - Logical NOT
+fun cond_not(operand: Condition) -> Condition {
+    return Condition {
+        type: COND_NOT,
+        data: { "operand": operand }
+    }
+}
+
+# Always true / false
+fun cond_true() -> Condition {
+    return Condition { type: COND_TRUE, data: {} }
+}
+
+fun cond_false() -> Condition {
+    return Condition { type: COND_FALSE, data: {} }
+}
+
+# Generic comparison
+fun cond_compare(left_expr: string, op: string, right_expr: string) -> Condition {
+    return Condition {
+        type: COND_COMPARE,
+        data: { "left": left_expr, "op": op, "right": right_expr }
+    }
+}
+
+# ============================================================================
+# EVALUATION FUNCTIONS
+# ============================================================================
+
+fun eval_intent(cond: Condition, ctx: ExecutionContext) -> bool {
+    var expected_name = cond.data["name"]
+    return ctx.intent.name == expected_name
+}
+
+fun eval_fact(cond: Condition, ctx: ExecutionContext) -> bool {
+    var key = cond.data["key"]
+    return ctx.facts.has(key)
+}
+
+fun eval_fact_value(cond: Condition, ctx: ExecutionContext) -> bool {
+    var key = cond.data["key"]
+    var expected = cond.data["expected"]
+    
+    when not ctx.facts.has(key) => return false
+    
+    var actual = ctx.facts.get(key)
+    return actual.equals(expected)
+}
+
+fun eval_drive(cond: Condition, ctx: ExecutionContext) -> bool {
+    var name = cond.data["name"]
+    var threshold = cond.data["threshold"]
+    var op = cond.data["operator"]
+    
+    var drive = ctx.get_drive(name)
+    when drive == null => return false
+    
+    when op == ">" => return drive.intensity > threshold
+    when op == "<" => return drive.intensity < threshold
+    when op == ">=" => return drive.intensity >= threshold
+    when op == "<=" => return drive.intensity <= threshold
+    when op == "==" => return drive.intensity == threshold
+    
+    return false
+}
+
+fun eval_affect(cond: Condition, ctx: ExecutionContext) -> bool {
+    var name = cond.data["name"]
+    var threshold = cond.data["threshold"]
+    var op = cond.data["operator"]
+    
+    var affect = ctx.get_affect(name)
+    when affect == null => return false
+    
+    when op == ">" => return affect.valence > threshold
+    when op == "<" => return affect.valence < threshold
+    when op == ">=" => return affect.valence >= threshold
+    when op == "<=" => return affect.valence <= threshold
+    when op == "==" => return affect.valence == threshold
+    
+    return false
+}
+
+fun eval_and(cond: Condition, ctx: ExecutionContext) -> bool {
+    var left = cond.data["left"]
+    var right = cond.data["right"]
+    
+    # Short-circuit evaluation
+    when not left.evaluate(ctx) => return false
+    return right.evaluate(ctx)
+}
+
+fun eval_or(cond: Condition, ctx: ExecutionContext) -> bool {
+    var left = cond.data["left"]
+    var right = cond.data["right"]
+    
+    # Short-circuit evaluation
+    when left.evaluate(ctx) => return true
+    return right.evaluate(ctx)
+}
+
+fun eval_not(cond: Condition, ctx: ExecutionContext) -> bool {
+    var operand = cond.data["operand"]
+    return not operand.evaluate(ctx)
+}
+
+fun eval_compare(cond: Condition, ctx: ExecutionContext) -> bool {
+    # For generic comparisons, evaluate expressions
+    var left = resolve_expr(cond.data["left"], ctx)
+    var right = resolve_expr(cond.data["right"], ctx)
+    var op = cond.data["op"]
+    
+    when op == "==" => return left == right
+    when op == "!=" => return left != right
+    when op == ">" => return left > right
+    when op == "<" => return left < right
+    when op == ">=" => return left >= right
+    when op == "<=" => return left <= right
+    
+    return false
+}
+
+fun resolve_expr(expr: string, ctx: ExecutionContext) -> Value {
+    # Simple expression resolution
+    when expr.starts_with("intent.") {
+        var key = expr.substring(7)
+        return ctx.intent.get(key)
+    }
+    when expr.starts_with("fact.") {
+        var key = expr.substring(5)
+        return ctx.facts.get(key)
+    }
+    # Literal value
+    return value_string(expr)
+}
+
+# ============================================================================
+# TESTS
+# ============================================================================
+
+test "Condition intent matching" {
+    var ctx = create_test_context("greet", {})
+    
+    var cond_match = cond_intent("greet")
+    assert cond_match.evaluate(ctx) == true
+    
+    var cond_no_match = cond_intent("other")
+    assert cond_no_match.evaluate(ctx) == false
+}
+
+test "Condition fact exists" {
+    var ctx = create_test_context("test", {})
+    ctx.facts.set("user_logged_in", value_bool(true))
+    
+    var cond_exists = cond_fact("user_logged_in")
+    assert cond_exists.evaluate(ctx) == true
+    
+    var cond_missing = cond_fact("missing")
+    assert cond_missing.evaluate(ctx) == false
+}
+
+test "Condition fact value" {
+    var ctx = create_test_context("test", {})
+    ctx.facts.set("count", value_number(5))
+    
+    var cond_match = cond_fact_equals("count", value_number(5))
+    assert cond_match.evaluate(ctx) == true
+    
+    var cond_no_match = cond_fact_equals("count", value_number(10))
+    assert cond_no_match.evaluate(ctx) == false
+}
+
+test "Condition drive threshold" {
+    var ctx = create_test_context("test", {})
+    ctx.add_drive("efficiency", 0.8)
+    
+    var cond_high = cond_drive_gt("efficiency", 0.5)
+    assert cond_high.evaluate(ctx) == true
+    
+    var cond_too_high = cond_drive_gt("efficiency", 0.9)
+    assert cond_too_high.evaluate(ctx) == false
+}
+
+test "Condition AND" {
+    var ctx = create_test_context("greet", {})
+    ctx.facts.set("logged_in", value_bool(true))
+    
+    var both = cond_and(
+        cond_intent("greet"),
+        cond_fact("logged_in")
+    )
+    assert both.evaluate(ctx) == true
+    
+    var one_false = cond_and(
+        cond_intent("greet"),
+        cond_fact("missing")
+    )
+    assert one_false.evaluate(ctx) == false
+}
+
+test "Condition OR" {
+    var ctx = create_test_context("greet", {})
+    
+    var first_true = cond_or(
+        cond_intent("greet"),
+        cond_intent("other")
+    )
+    assert first_true.evaluate(ctx) == true
+    
+    var second_true = cond_or(
+        cond_intent("other"),
+        cond_intent("greet")
+    )
+    assert second_true.evaluate(ctx) == true
+    
+    var both_false = cond_or(
+        cond_intent("a"),
+        cond_intent("b")
+    )
+    assert both_false.evaluate(ctx) == false
+}
+
+test "Condition NOT" {
+    var ctx = create_test_context("greet", {})
+    
+    var not_match = cond_not(cond_intent("greet"))
+    assert not_match.evaluate(ctx) == false
+    
+    var not_no_match = cond_not(cond_intent("other"))
+    assert not_no_match.evaluate(ctx) == true
+}
+
+test "Condition true/false" {
+    var ctx = create_test_context("test", {})
+    
+    assert cond_true().evaluate(ctx) == true
+    assert cond_false().evaluate(ctx) == false
+}
+
+# Helper for tests
+fun create_test_context(intent_name: string, intent_args: map) -> ExecutionContext {
+    return create_execution_context(
+        create_intent(intent_name, intent_args),
+        create_fact_store()
+    )
+}

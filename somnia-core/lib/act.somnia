@@ -1,0 +1,421 @@
+# ============================================================================
+# Somnia Core Library - ACT
+# Self-hosted action execution (The Conscious)
+# ============================================================================
+
+import "types.somnia"
+import "proposal.somnia"
+
+# ============================================================================
+# ACTION RESULT TYPES
+# ============================================================================
+
+const RESULT_SUCCESS = "success"
+const RESULT_ERROR = "error"
+const RESULT_TIMEOUT = "timeout"
+const RESULT_CANCELLED = "cancelled"
+
+class ActionResult {
+    field status: string            # success, error, timeout, cancelled
+    field value: Value              # Return value
+    field error_message: string     # Error if failed
+    field duration_ms: number       # Execution time
+    field retries: number           # Number of retries attempted
+    
+    method is_success() -> bool {
+        return self.status == RESULT_SUCCESS
+    }
+    
+    method is_error() -> bool {
+        return self.status == RESULT_ERROR
+    }
+    
+    method is_timeout() -> bool {
+        return self.status == RESULT_TIMEOUT
+    }
+}
+
+fun result_success(value: Value, duration: number) -> ActionResult {
+    return ActionResult {
+        status: RESULT_SUCCESS,
+        value: value,
+        error_message: "",
+        duration_ms: duration,
+        retries: 0
+    }
+}
+
+fun result_error(message: string, duration: number) -> ActionResult {
+    return ActionResult {
+        status: RESULT_ERROR,
+        value: value_null(),
+        error_message: message,
+        duration_ms: duration,
+        retries: 0
+    }
+}
+
+fun result_timeout(duration: number) -> ActionResult {
+    return ActionResult {
+        status: RESULT_TIMEOUT,
+        value: value_null(),
+        error_message: "Action timed out",
+        duration_ms: duration,
+        retries: 0
+    }
+}
+
+# ============================================================================
+# ACTION HANDLER - Function signature for actions
+# ============================================================================
+
+# Actions are functions: (args: map) -> ActionResult
+type ActionHandler = fun(args: map) -> ActionResult
+
+# ============================================================================
+# ACTION DEFINITION
+# ============================================================================
+
+class ActionDef {
+    field name: string
+    field handler: ActionHandler
+    field timeout_ms: number
+    field max_retries: number
+    field retry_delay_ms: number
+    field description: string
+    
+    method execute(args: map) -> ActionResult {
+        var start = native_time_ms()
+        var result = null
+        var attempts = 0
+        
+        while attempts <= self.max_retries {
+            attempts = attempts + 1
+            
+            # Execute with timeout
+            result = self.execute_with_timeout(args)
+            
+            when result.is_success() {
+                result.retries = attempts - 1
+                return result
+            }
+            
+            # Retry on error (not on timeout or cancel)
+            when result.is_error() and attempts <= self.max_retries {
+                # Exponential backoff
+                var delay = self.retry_delay_ms * pow(2, attempts - 1)
+                native_sleep(delay)
+            }
+            else {
+                break
+            }
+        }
+        
+        result.retries = attempts - 1
+        result.duration_ms = native_time_ms() - start
+        return result
+    }
+    
+    method execute_with_timeout(args: map) -> ActionResult {
+        var start = native_time_ms()
+        
+        # Call handler (timeout handled by native layer)
+        var result = native_call_with_timeout(self.handler, args, self.timeout_ms)
+        
+        var duration = native_time_ms() - start
+        result.duration_ms = duration
+        
+        return result
+    }
+}
+
+fun create_action(name: string, handler: ActionHandler) -> ActionDef {
+    return ActionDef {
+        name: name,
+        handler: handler,
+        timeout_ms: 30000,      # 30 second default
+        max_retries: 0,
+        retry_delay_ms: 100,
+        description: ""
+    }
+}
+
+fun create_action_with_retry(name: string, handler: ActionHandler, retries: number) -> ActionDef {
+    return ActionDef {
+        name: name,
+        handler: handler,
+        timeout_ms: 30000,
+        max_retries: retries,
+        retry_delay_ms: 100,
+        description: ""
+    }
+}
+
+# ============================================================================
+# ACTION REGISTRY
+# ============================================================================
+
+class ActionRegistry {
+    field actions: map              # name -> ActionDef
+    
+    method register(action: ActionDef) {
+        self.actions[action.name] = action
+    }
+    
+    method get(name: string) -> ActionDef {
+        when name in self.actions => return self.actions[name]
+        return null
+    }
+    
+    method has(name: string) -> bool {
+        return name in self.actions
+    }
+    
+    method list() -> list {
+        return native_keys(self.actions)
+    }
+    
+    method execute(name: string, args: map) -> ActionResult {
+        var action = self.get(name)
+        
+        when action == null {
+            return result_error("Action not found: " + name, 0)
+        }
+        
+        return action.execute(args)
+    }
+}
+
+fun create_registry() -> ActionRegistry {
+    return ActionRegistry {
+        actions: {}
+    }
+}
+
+# ============================================================================
+# ACT - The Conscious
+# Executes selected proposals
+# ============================================================================
+
+class Act {
+    field registry: ActionRegistry
+    
+    method register(action: ActionDef) {
+        self.registry.register(action)
+    }
+    
+    method execute(proposal: SelectedProposal) -> ActionResult {
+        var action_name = proposal.proposal.action
+        var args = proposal.proposal.args
+        
+        return self.registry.execute(action_name, args)
+    }
+    
+    method execute_all(proposals: list) -> list {
+        var results = []
+        
+        for p in proposals {
+            var result = self.execute(p)
+            results = results + [result]
+        }
+        
+        return results
+    }
+}
+
+fun create_act() -> Act {
+    return Act {
+        registry: create_registry()
+    }
+}
+
+# ============================================================================
+# BUILT-IN ACTIONS
+# ============================================================================
+
+# log(level: string, message: string)
+fun action_log(args: map) -> ActionResult {
+    var level = "INFO"
+    var message = ""
+    
+    when "level" in args => level = args["level"].data
+    when "message" in args => message = args["message"].data
+    
+    native_log(level, message)
+    
+    return result_success(value_bool(true), 0)
+}
+
+# sleep(ms: number)
+fun action_sleep(args: map) -> ActionResult {
+    var ms = 0
+    when "ms" in args => ms = args["ms"].data
+    
+    native_sleep(ms)
+    
+    return result_success(value_number(ms), ms)
+}
+
+# respond(status: number, body: any)
+fun action_respond(args: map) -> ActionResult {
+    var status = 200
+    var body = value_null()
+    
+    when "status" in args => status = args["status"].data
+    when "body" in args => body = args["body"]
+    
+    # Store response for runtime to pick up
+    native_set_response(status, body)
+    
+    return result_success(value_bool(true), 0)
+}
+
+# noop() - Do nothing, useful for testing
+fun action_noop(args: map) -> ActionResult {
+    return result_success(value_null(), 0)
+}
+
+# Register built-in actions
+fun register_builtins(act: Act) {
+    act.register(create_action("log", action_log))
+    act.register(create_action("sleep", action_sleep))
+    act.register(create_action("respond", action_respond))
+    act.register(create_action("noop", action_noop))
+}
+
+# ============================================================================
+# ACT DSL
+# ============================================================================
+
+class ActBlock {
+    field act: Act
+    
+    method action(name: string, handler: ActionHandler) -> ActBlock {
+        self.act.register(create_action(name, handler))
+        return self
+    }
+    
+    method action_with_retry(name: string, handler: ActionHandler, retries: number) -> ActBlock {
+        self.act.register(create_action_with_retry(name, handler, retries))
+        return self
+    }
+    
+    method with_builtins() -> ActBlock {
+        register_builtins(self.act)
+        return self
+    }
+    
+    method build() -> Act {
+        return self.act
+    }
+}
+
+fun ACT() -> ActBlock {
+    return ActBlock {
+        act: create_act()
+    }
+}
+
+# ============================================================================
+# TESTS
+# ============================================================================
+
+test "ActionResult success" {
+    var result = result_success(value_string("hello"), 100)
+    
+    assert result.is_success() == true
+    assert result.is_error() == false
+    assert result.value.data == "hello"
+    assert result.duration_ms == 100
+}
+
+test "ActionResult error" {
+    var result = result_error("Something went wrong", 50)
+    
+    assert result.is_success() == false
+    assert result.is_error() == true
+    assert result.error_message == "Something went wrong"
+}
+
+test "ActionRegistry" {
+    var registry = create_registry()
+    
+    registry.register(create_action("log", action_log))
+    registry.register(create_action("noop", action_noop))
+    
+    assert registry.has("log") == true
+    assert registry.has("noop") == true
+    assert registry.has("missing") == false
+    
+    var actions = registry.list()
+    assert len(actions) == 2
+}
+
+test "ActionRegistry execute" {
+    var registry = create_registry()
+    registry.register(create_action("noop", action_noop))
+    
+    var result = registry.execute("noop", {})
+    assert result.is_success() == true
+    
+    var not_found = registry.execute("missing", {})
+    assert not_found.is_error() == true
+}
+
+test "Action with retry" {
+    var attempt_count = 0
+    var failing_action = fun(args: map) -> ActionResult {
+        attempt_count = attempt_count + 1
+        when attempt_count < 3 {
+            return result_error("Failed attempt " + native_to_string(attempt_count), 0)
+        }
+        return result_success(value_bool(true), 0)
+    }
+    
+    var action = create_action_with_retry("test", failing_action, 3)
+    var result = action.execute({})
+    
+    assert result.is_success() == true
+    assert result.retries == 2  # Succeeded on 3rd attempt
+}
+
+test "Act execute proposal" {
+    var act = ACT().with_builtins().build()
+    
+    var proposal = create_selected(
+        create_proposal("noop", {}, 0.9, "r1", 10),
+        1,
+        "Test"
+    )
+    
+    var result = act.execute(proposal)
+    assert result.is_success() == true
+}
+
+test "Act execute all" {
+    var act = ACT().with_builtins().build()
+    
+    var proposals = [
+        create_selected(create_proposal("noop", {}, 0.9, "r1", 10), 1, ""),
+        create_selected(create_proposal("noop", {}, 0.8, "r2", 20), 2, "")
+    ]
+    
+    var results = act.execute_all(proposals)
+    
+    assert len(results) == 2
+    assert results[0].is_success() == true
+    assert results[1].is_success() == true
+}
+
+test "ACT DSL" {
+    var act = ACT()
+        .with_builtins()
+        .action("custom", fun(args) {
+            return result_success(value_string("custom result"), 0)
+        })
+        .build()
+    
+    assert act.registry.has("log") == true
+    assert act.registry.has("sleep") == true
+    assert act.registry.has("custom") == true
+}

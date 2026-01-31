@@ -1,0 +1,646 @@
+# ============================================================================
+# E-Commerce API - Pure Somnia REST Service
+# Complete shopping cart and order management
+# 100% Somnia - Zero dependencies
+# ============================================================================
+
+# ============================================================================
+# DATA TYPES
+# ============================================================================
+
+class Product {
+    field id: string
+    field name: string
+    field description: string
+    field price: number
+    field stock: number
+    field category: string
+    field images: list
+    field active: bool
+}
+
+class CartItem {
+    field product_id: string
+    field quantity: number
+    field price: number
+}
+
+class Cart {
+    field id: string
+    field user_id: string
+    field items: list
+    field created_at: number
+    field updated_at: number
+}
+
+class Order {
+    field id: string
+    field user_id: string
+    field items: list
+    field subtotal: number
+    field tax: number
+    field shipping: number
+    field total: number
+    field status: string        # pending, paid, shipped, delivered, cancelled
+    field shipping_address: map
+    field created_at: number
+    field updated_at: number
+}
+
+# In-memory database
+var products = {}
+var carts = {}
+var orders = {}
+var counters = { "product": 0, "cart": 0, "order": 0 }
+
+# ============================================================================
+# HELPERS
+# ============================================================================
+
+fun gen_id(type: string) -> string {
+    counters[type] = counters[type] + 1
+    return type + "_" + to_string(counters[type])
+}
+
+fun product_to_json(p: Product) -> map {
+    return {
+        "id": p.id,
+        "name": p.name,
+        "description": p.description,
+        "price": p.price,
+        "stock": p.stock,
+        "category": p.category,
+        "images": p.images,
+        "active": p.active
+    }
+}
+
+fun cart_to_json(cart: Cart) -> map {
+    var items_json = []
+    var total = 0
+    
+    for item in cart.items {
+        var product = products[item.product_id]
+        var item_total = item.price * item.quantity
+        total = total + item_total
+        
+        items_json = items_json + [{
+            "product_id": item.product_id,
+            "product_name": if product != null then product.name else "Unknown",
+            "quantity": item.quantity,
+            "price": item.price,
+            "total": item_total
+        }]
+    }
+    
+    return {
+        "id": cart.id,
+        "user_id": cart.user_id,
+        "items": items_json,
+        "item_count": len(cart.items),
+        "total": total
+    }
+}
+
+fun order_to_json(order: Order) -> map {
+    return {
+        "id": order.id,
+        "user_id": order.user_id,
+        "items": order.items,
+        "subtotal": order.subtotal,
+        "tax": order.tax,
+        "shipping": order.shipping,
+        "total": order.total,
+        "status": order.status,
+        "shipping_address": order.shipping_address,
+        "created_at": order.created_at
+    }
+}
+
+fun get_or_create_cart(user_id: string) -> Cart {
+    when user_id in carts {
+        return carts[user_id]
+    }
+    
+    var cart = Cart {
+        id: gen_id("cart"),
+        user_id: user_id,
+        items: [],
+        created_at: time_ms(),
+        updated_at: time_ms()
+    }
+    carts[user_id] = cart
+    return cart
+}
+
+fun calculate_tax(subtotal: number) -> number {
+    return round(subtotal * 0.1, 2)  # 10% tax
+}
+
+fun calculate_shipping(subtotal: number) -> number {
+    when subtotal >= 100 {
+        return 0  # Free shipping over $100
+    }
+    return 9.99
+}
+
+# ============================================================================
+# ID - Rule Engine
+# ============================================================================
+
+ID {
+    drive profit = 0.7
+    drive customer_satisfaction = 0.9
+    
+    # =========================================================================
+    # PRODUCTS
+    # =========================================================================
+    
+    when intent("GET /products") {
+        var result = []
+        
+        for id in keys(products) {
+            var p = products[id]
+            when p.active {
+                # Apply filters
+                var include = true
+                
+                when intent.query.category != null {
+                    when p.category != intent.query.category {
+                        include = false
+                    }
+                }
+                
+                when intent.query.min_price != null {
+                    when p.price < to_number(intent.query.min_price) {
+                        include = false
+                    }
+                }
+                
+                when intent.query.max_price != null {
+                    when p.price > to_number(intent.query.max_price) {
+                        include = false
+                    }
+                }
+                
+                when include {
+                    result = result + [product_to_json(p)]
+                }
+            }
+        }
+        
+        # Sort by name
+        result = sort(result, fun(a, b) {
+            return compare(a.name, b.name)
+        })
+        
+        => respond(200, {
+            "products": result,
+            "count": len(result)
+        }) @0.9
+    }
+    
+    when intent("GET /products/:id") {
+        var id = intent.params.id
+        
+        when id in products {
+            => respond(200, product_to_json(products[id])) @0.9
+        }
+        
+        => respond(404, { "error": "Product not found" }) @0.8
+    }
+    
+    when intent("POST /products") {
+        var product = Product {
+            id: gen_id("product"),
+            name: intent.body.name,
+            description: intent.body.description or "",
+            price: intent.body.price,
+            stock: intent.body.stock or 0,
+            category: intent.body.category or "general",
+            images: intent.body.images or [],
+            active: true
+        }
+        
+        products[product.id] = product
+        
+        => respond(201, product_to_json(product)) @0.9
+    }
+    
+    when intent("PUT /products/:id") {
+        var id = intent.params.id
+        
+        when id in products {
+            var p = products[id]
+            
+            when intent.body.name != null { p.name = intent.body.name }
+            when intent.body.description != null { p.description = intent.body.description }
+            when intent.body.price != null { p.price = intent.body.price }
+            when intent.body.stock != null { p.stock = intent.body.stock }
+            when intent.body.category != null { p.category = intent.body.category }
+            when intent.body.active != null { p.active = intent.body.active }
+            
+            products[id] = p
+            
+            => respond(200, product_to_json(p)) @0.9
+        }
+        
+        => respond(404, { "error": "Product not found" }) @0.8
+    }
+    
+    # =========================================================================
+    # CART
+    # =========================================================================
+    
+    when intent("GET /cart") {
+        var user_id = intent.headers.user_id or "guest"
+        var cart = get_or_create_cart(user_id)
+        
+        => respond(200, cart_to_json(cart)) @0.9
+    }
+    
+    when intent("POST /cart/items") {
+        var user_id = intent.headers.user_id or "guest"
+        var product_id = intent.body.product_id
+        var quantity = intent.body.quantity or 1
+        
+        when product_id in products {
+            var product = products[product_id]
+            
+            when product.stock < quantity {
+                => respond(400, { 
+                    "error": "Insufficient stock",
+                    "available": product.stock
+                }) @0.9
+            }
+            
+            var cart = get_or_create_cart(user_id)
+            
+            # Check if item already in cart
+            var found = false
+            var new_items = []
+            for item in cart.items {
+                when item.product_id == product_id {
+                    item.quantity = item.quantity + quantity
+                    found = true
+                }
+                new_items = new_items + [item]
+            }
+            
+            when not found {
+                new_items = new_items + [CartItem {
+                    product_id: product_id,
+                    quantity: quantity,
+                    price: product.price
+                }]
+            }
+            
+            cart.items = new_items
+            cart.updated_at = time_ms()
+            carts[user_id] = cart
+            
+            => respond(200, cart_to_json(cart)) @0.9
+        }
+        
+        => respond(404, { "error": "Product not found" }) @0.8
+    }
+    
+    when intent("PUT /cart/items/:product_id") {
+        var user_id = intent.headers.user_id or "guest"
+        var product_id = intent.params.product_id
+        var quantity = intent.body.quantity
+        
+        var cart = get_or_create_cart(user_id)
+        var new_items = []
+        
+        for item in cart.items {
+            when item.product_id == product_id {
+                when quantity > 0 {
+                    item.quantity = quantity
+                    new_items = new_items + [item]
+                }
+                # If quantity is 0, don't add (removes item)
+            }
+            else {
+                new_items = new_items + [item]
+            }
+        }
+        
+        cart.items = new_items
+        cart.updated_at = time_ms()
+        carts[user_id] = cart
+        
+        => respond(200, cart_to_json(cart)) @0.9
+    }
+    
+    when intent("DELETE /cart/items/:product_id") {
+        var user_id = intent.headers.user_id or "guest"
+        var product_id = intent.params.product_id
+        var cart = get_or_create_cart(user_id)
+        
+        cart.items = filter(cart.items, fun(item) {
+            return item.product_id != product_id
+        })
+        cart.updated_at = time_ms()
+        carts[user_id] = cart
+        
+        => respond(200, cart_to_json(cart)) @0.9
+    }
+    
+    when intent("DELETE /cart") {
+        var user_id = intent.headers.user_id or "guest"
+        
+        when user_id in carts {
+            carts[user_id].items = []
+            carts[user_id].updated_at = time_ms()
+        }
+        
+        => respond(200, { "message": "Cart cleared" }) @0.9
+    }
+    
+    # =========================================================================
+    # CHECKOUT & ORDERS
+    # =========================================================================
+    
+    when intent("POST /checkout") {
+        var user_id = intent.headers.user_id or "guest"
+        var cart = get_or_create_cart(user_id)
+        
+        when len(cart.items) == 0 {
+            => respond(400, { "error": "Cart is empty" }) @0.9
+        }
+        
+        # Calculate totals
+        var subtotal = 0
+        var order_items = []
+        
+        for item in cart.items {
+            var product = products[item.product_id]
+            
+            when product == null or product.stock < item.quantity {
+                => respond(400, { 
+                    "error": "Product unavailable or insufficient stock",
+                    "product_id": item.product_id
+                }) @0.9
+            }
+            
+            var item_total = item.price * item.quantity
+            subtotal = subtotal + item_total
+            
+            order_items = order_items + [{
+                "product_id": item.product_id,
+                "product_name": product.name,
+                "quantity": item.quantity,
+                "price": item.price,
+                "total": item_total
+            }]
+            
+            # Reduce stock
+            product.stock = product.stock - item.quantity
+            products[item.product_id] = product
+        }
+        
+        var tax = calculate_tax(subtotal)
+        var shipping = calculate_shipping(subtotal)
+        var total = subtotal + tax + shipping
+        
+        var order = Order {
+            id: gen_id("order"),
+            user_id: user_id,
+            items: order_items,
+            subtotal: subtotal,
+            tax: tax,
+            shipping: shipping,
+            total: total,
+            status: "pending",
+            shipping_address: intent.body.shipping_address or {},
+            created_at: time_ms(),
+            updated_at: time_ms()
+        }
+        
+        orders[order.id] = order
+        
+        # Clear cart
+        carts[user_id].items = []
+        
+        => respond(201, order_to_json(order)) @0.9
+    }
+    
+    when intent("GET /orders") {
+        var user_id = intent.headers.user_id or "guest"
+        var result = []
+        
+        for id in keys(orders) {
+            when orders[id].user_id == user_id {
+                result = result + [order_to_json(orders[id])]
+            }
+        }
+        
+        # Sort by date descending
+        result = sort(result, fun(a, b) {
+            return b.created_at - a.created_at
+        })
+        
+        => respond(200, {
+            "orders": result,
+            "count": len(result)
+        }) @0.9
+    }
+    
+    when intent("GET /orders/:id") {
+        var id = intent.params.id
+        
+        when id in orders {
+            => respond(200, order_to_json(orders[id])) @0.9
+        }
+        
+        => respond(404, { "error": "Order not found" }) @0.8
+    }
+    
+    when intent("PUT /orders/:id/status") {
+        var id = intent.params.id
+        var new_status = intent.body.status
+        
+        when id in orders {
+            var valid_statuses = ["pending", "paid", "shipped", "delivered", "cancelled"]
+            
+            when new_status in valid_statuses {
+                orders[id].status = new_status
+                orders[id].updated_at = time_ms()
+                
+                => respond(200, order_to_json(orders[id])) @0.9
+            }
+            
+            => respond(400, { "error": "Invalid status" }) @0.85
+        }
+        
+        => respond(404, { "error": "Order not found" }) @0.8
+    }
+    
+    # =========================================================================
+    # CATEGORIES
+    # =========================================================================
+    
+    when intent("GET /categories") {
+        var categories = {}
+        
+        for id in keys(products) {
+            var cat = products[id].category
+            when cat in categories {
+                categories[cat] = categories[cat] + 1
+            }
+            else {
+                categories[cat] = 1
+            }
+        }
+        
+        => respond(200, { "categories": categories }) @0.9
+    }
+    
+    # =========================================================================
+    # HEALTH
+    # =========================================================================
+    
+    when intent("GET /health") {
+        => respond(200, {
+            "status": "healthy",
+            "service": "E-Commerce API",
+            "version": "1.0.0",
+            "products": len(keys(products)),
+            "orders": len(keys(orders))
+        }) @1.0
+    }
+}
+
+# ============================================================================
+# EGO - Policy Layer
+# ============================================================================
+
+EGO {
+    budget "respond" = 1000 per 60s
+    
+    forbid when intent.body.price < 0 and intent("POST /products") {
+        reason: "Price cannot be negative"
+        => respond(400, { "error": "Price cannot be negative" })
+    }
+    
+    forbid when intent.body.quantity < 0 and intent("POST /cart/items") {
+        reason: "Quantity cannot be negative"
+        => respond(400, { "error": "Quantity cannot be negative" })
+    }
+    
+    select top 1
+}
+
+# ============================================================================
+# ACT
+# ============================================================================
+
+ACT {
+    action respond(status: number, body: any) {
+        http_respond(status, body)
+    }
+}
+
+# ============================================================================
+# SERVER
+# ============================================================================
+
+server {
+    host: "0.0.0.0"
+    port: 8082
+    
+    on_start {
+        println("╔═══════════════════════════════════════════════════════════════╗")
+        println("║     E-COMMERCE API                                            ║")
+        println("║     100% Pure Somnia                                          ║")
+        println("╚═══════════════════════════════════════════════════════════════╝")
+        println("")
+        println("Server running at http://localhost:8082")
+        println("")
+        
+        # Seed products
+        products["prod_1"] = Product {
+            id: "prod_1", name: "Laptop", description: "High-performance laptop",
+            price: 999.99, stock: 50, category: "electronics", images: [], active: true
+        }
+        products["prod_2"] = Product {
+            id: "prod_2", name: "Mouse", description: "Wireless mouse",
+            price: 29.99, stock: 200, category: "electronics", images: [], active: true
+        }
+        products["prod_3"] = Product {
+            id: "prod_3", name: "T-Shirt", description: "Cotton t-shirt",
+            price: 19.99, stock: 100, category: "clothing", images: [], active: true
+        }
+        
+        println("Seeded 3 products")
+    }
+}
+
+# ============================================================================
+# TESTS
+# ============================================================================
+
+test "List products" {
+    var response = simulate_request("GET", "/products", {})
+    assert response.status == 200
+    assert response.body.count >= 0
+}
+
+test "Add to cart" {
+    # Seed product
+    products["test_prod"] = Product {
+        id: "test_prod", name: "Test", description: "", 
+        price: 10.00, stock: 10, category: "test", images: [], active: true
+    }
+    
+    var response = simulate_request("POST", "/cart/items", {
+        "product_id": "test_prod",
+        "quantity": 2
+    }, { "user_id": "test_user" })
+    
+    assert response.status == 200
+    assert response.body.item_count == 1
+    assert response.body.total == 20.00
+}
+
+test "Checkout flow" {
+    # Create product with stock
+    products["checkout_prod"] = Product {
+        id: "checkout_prod", name: "Checkout Test", description: "",
+        price: 50.00, stock: 5, category: "test", images: [], active: true
+    }
+    
+    # Add to cart
+    simulate_request("POST", "/cart/items", {
+        "product_id": "checkout_prod",
+        "quantity": 1
+    }, { "user_id": "checkout_user" })
+    
+    # Checkout
+    var response = simulate_request("POST", "/checkout", {
+        "shipping_address": {
+            "street": "123 Main St",
+            "city": "Test City"
+        }
+    }, { "user_id": "checkout_user" })
+    
+    assert response.status == 201
+    assert response.body.subtotal == 50.00
+    assert response.body.status == "pending"
+}
+
+test "Insufficient stock" {
+    products["low_stock"] = Product {
+        id: "low_stock", name: "Low Stock", description: "",
+        price: 10.00, stock: 1, category: "test", images: [], active: true
+    }
+    
+    var response = simulate_request("POST", "/cart/items", {
+        "product_id": "low_stock",
+        "quantity": 5
+    }, { "user_id": "stock_test_user" })
+    
+    assert response.status == 400
+    assert response.body.error == "Insufficient stock"
+}

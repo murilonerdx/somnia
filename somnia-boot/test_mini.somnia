@@ -1,0 +1,13 @@
+/*
+ * Mini Test - DEBUG
+ */
+class Test {
+    field name: string = "Somnia"
+    method greet(x) {
+        println("Hello " + x + " from " + self.name)
+    }
+}
+
+var t = Test { name: "Native" }
+println("Object created: " + native_to_string(t))
+t.greet("World")

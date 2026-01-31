@@ -1,0 +1,25 @@
+// Hello World in Somnia!
+// This file demonstrates the standalone Somnia CLI.
+
+id {
+    const GREETING = "Hello from Somnia!"
+    const VERSION = 1
+    let counter = 0
+}
+
+ego {
+    fun add(a: Int, b: Int) {
+        return a + b
+    }
+}
+
+act {
+    // Entry point for CLI execution
+    action "main" {
+        print(GREETING)
+        print("Version: " + VERSION)
+        
+        let result = add(5, 10)
+        print("5 + 10 = " + result)
+    }
+}

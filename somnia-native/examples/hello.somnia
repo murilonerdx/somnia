@@ -1,0 +1,60 @@
+# Hello World - Somnia Native
+# Este arquivo testa o runtime C nativo
+
+println("========================================")
+println("  SOMNIA NATIVE - Hello World!")
+println("========================================")
+println("")
+
+# Variáveis
+var name = "Somnia"
+var version = "1.0.0"
+
+println("Linguagem: " + name)
+println("Versao: " + version)
+println("")
+
+# Funções
+fun greet(person) {
+    return "Ola, " + person + "!"
+}
+
+println(greet("Desenvolvedor"))
+println("")
+
+# Arrays
+var numbers = [1, 2, 3, 4, 5]
+println("Array: " + native_to_string(numbers))
+println("Tamanho: " + native_to_string(len(numbers)))
+println("")
+
+# Maps
+var user = {
+    "name": "John",
+    "age": 30,
+    "role": "developer"
+}
+
+println("Usuario: " + user["name"])
+println("Idade: " + native_to_string(user["age"]))
+println("")
+
+# Loop for
+println("Loop for:")
+for i in range(1, 6) {
+    println("  Numero: " + native_to_string(i))
+}
+println("")
+
+# When (pattern matching)
+var status = 200
+
+println("Verificando status...")
+when status == 200 => println("  OK - Sucesso!")
+when status == 404 => println("  Erro - Nao encontrado")
+when status == 500 => println("  Erro - Servidor")
+
+println("")
+println("========================================")
+println("  Teste concluido com sucesso!")
+println("========================================")

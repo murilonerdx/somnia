@@ -1,0 +1,270 @@
+# ============================================================================
+# Somnia Core Library - ID Engine
+# Self-hosted rule engine (The Unconscious)
+# ============================================================================
+
+import "types.somnia"
+import "condition.somnia"
+import "proposal.somnia"
+import "context.somnia"
+import "rule.somnia"
+
+# ============================================================================
+# ID ENGINE - The Unconscious
+# Evaluates rules and generates proposals
+# ============================================================================
+
+class IdEngine {
+    field rules: list               # List of Rule
+    field rule_index: map           # Indexed by intent name for fast lookup
+    field default_drives: map       # Default drive intensities
+    field default_affects: map      # Default affect valences
+    
+    method add_rule(r: Rule) {
+        self.rules = self.rules + [r]
+        
+        # Index by intent if condition is simple intent check
+        when r.condition.type == COND_INTENT {
+            var intent_name = r.condition.data["name"]
+            when not (intent_name in self.rule_index) {
+                self.rule_index[intent_name] = []
+            }
+            self.rule_index[intent_name] = self.rule_index[intent_name] + [r]
+        }
+    }
+    
+    method set_default_drive(name: string, intensity: number) {
+        self.default_drives[name] = intensity
+    }
+    
+    method set_default_affect(name: string, valence: number) {
+        self.default_affects[name] = valence
+    }
+    
+    method evaluate(ctx: ExecutionContext) -> ProposalList {
+        # Apply default drives if not set
+        for name in native_keys(self.default_drives) {
+            when ctx.get_drive(name) == null {
+                ctx.add_drive(name, self.default_drives[name])
+            }
+        }
+        
+        # Apply default affects if not set
+        for name in native_keys(self.default_affects) {
+            when ctx.get_affect(name) == null {
+                ctx.add_affect(name, self.default_affects[name])
+            }
+        }
+        
+        var proposals = create_proposal_list()
+        
+        # First try indexed rules for this intent
+        var intent_name = ctx.intent.name
+        when intent_name in self.rule_index {
+            var indexed_rules = self.rule_index[intent_name]
+            for r in indexed_rules {
+                when r.matches(ctx) {
+                    proposals.add(r.generate_proposal(ctx))
+                }
+            }
+        }
+        
+        # Then check all rules (for non-intent-specific rules)
+        for r in self.rules {
+            # Skip already indexed rules
+            when r.condition.type != COND_INTENT {
+                when r.matches(ctx) {
+                    proposals.add(r.generate_proposal(ctx))
+                }
+            }
+        }
+        
+        # Sort by weight descending
+        proposals.sort_by_weight()
+        
+        return proposals
+    }
+    
+    method rule_count() -> number {
+        return len(self.rules)
+    }
+}
+
+fun create_id_engine() -> IdEngine {
+    return IdEngine {
+        rules: [],
+        rule_index: {},
+        default_drives: {},
+        default_affects: {}
+    }
+}
+
+# ============================================================================
+# ID DSL - Domain Specific Language for defining ID blocks
+# ============================================================================
+
+class IdBlock {
+    field engine: IdEngine
+    
+    method drive(name: string, intensity: number) -> IdBlock {
+        self.engine.set_default_drive(name, intensity)
+        return self
+    }
+    
+    method affect(name: string, valence: number) -> IdBlock {
+        self.engine.set_default_affect(name, valence)
+    }
+    
+    method rule(id: string) -> RuleBuilder {
+        var builder = rule(id)
+        # Store reference so build() can add to engine
+        return builder
+    }
+    
+    method add(r: Rule) -> IdBlock {
+        self.engine.add_rule(r)
+        return self
+    }
+    
+    method build() -> IdEngine {
+        return self.engine
+    }
+}
+
+fun ID() -> IdBlock {
+    return IdBlock {
+        engine: create_id_engine()
+    }
+}
+
+# ============================================================================
+# TESTS
+# ============================================================================
+
+test "IdEngine rule evaluation" {
+    var engine = create_id_engine()
+    
+    engine.add_rule(create_rule("r1", 10, cond_intent("greet"), "log", 0.9))
+    engine.add_rule(create_rule("r2", 20, cond_intent("greet"), "wave", 0.7))
+    engine.add_rule(create_rule("r3", 30, cond_intent("other"), "noop", 0.5))
+    
+    var ctx = create_execution_context(
+        create_intent("greet", {}),
+        create_fact_store()
+    )
+    
+    var proposals = engine.evaluate(ctx)
+    
+    assert proposals.count() == 2
+    assert proposals.get(0).action == "log"      # Highest weight first
+    assert proposals.get(1).action == "wave"
+}
+
+test "IdEngine with fact conditions" {
+    var engine = create_id_engine()
+    
+    # Rule that requires fact
+    engine.add_rule(create_rule("r1", 10,
+        cond_and(cond_intent("get_user"), cond_fact("use_cache")),
+        "cache_lookup", 0.9))
+    
+    # Fallback rule
+    engine.add_rule(create_rule("r2", 20,
+        cond_intent("get_user"),
+        "db_query", 0.6))
+    
+    # With cache enabled
+    var facts1 = create_fact_store()
+    facts1.set("use_cache", value_bool(true))
+    var ctx1 = create_execution_context(create_intent("get_user", {}), facts1)
+    
+    var proposals1 = engine.evaluate(ctx1)
+    assert proposals1.count() == 2
+    assert proposals1.get(0).action == "cache_lookup"
+    
+    # Without cache
+    var facts2 = create_fact_store()
+    var ctx2 = create_execution_context(create_intent("get_user", {}), facts2)
+    
+    var proposals2 = engine.evaluate(ctx2)
+    assert proposals2.count() == 1
+    assert proposals2.get(0).action == "db_query"
+}
+
+test "IdEngine with drive modifiers" {
+    var engine = create_id_engine()
+    engine.set_default_drive("efficiency", 0.8)
+    
+    var r = Rule {
+        id: "r1",
+        line: 10,
+        condition: cond_intent("process"),
+        action: "fast_process",
+        action_args: {},
+        base_weight: 0.5,
+        drive_modifiers: [{ "drive": "efficiency", "factor": 0.5 }],
+        affect_modifiers: [],
+        description: ""
+    }
+    engine.add_rule(r)
+    
+    var ctx = create_execution_context(
+        create_intent("process", {}),
+        create_fact_store()
+    )
+    
+    var proposals = engine.evaluate(ctx)
+    assert proposals.count() == 1
+    # Weight should be boosted by efficiency drive
+    assert proposals.get(0).weight > 0.5
+}
+
+test "IdEngine DSL" {
+    var engine = ID()
+        .drive("efficiency", 0.8)
+        .drive("safety", 0.9)
+        .affect("calm", 0.5)
+        .add(rule("greet_rule")
+            .when_intent("greet")
+            .propose("log")
+            .weight(0.9)
+            .build())
+        .add(rule("safe_rule")
+            .when_intent("process")
+            .and_drive_gt("safety", 0.7)
+            .propose("safe_process")
+            .weight(0.8)
+            .build())
+        .build()
+    
+    assert engine.rule_count() == 2
+    assert engine.default_drives["efficiency"] == 0.8
+    assert engine.default_affects["calm"] == 0.5
+}
+
+test "IdEngine indexing performance" {
+    var engine = create_id_engine()
+    
+    # Add many rules
+    for i in range(0, 100) {
+        engine.add_rule(create_rule(
+            "rule_" + native_to_string(i),
+            i,
+            cond_intent("intent_" + native_to_string(i % 10)),
+            "action_" + native_to_string(i),
+            0.5
+        ))
+    }
+    
+    assert engine.rule_count() == 100
+    
+    # Evaluation should use index
+    var ctx = create_execution_context(
+        create_intent("intent_5", {}),
+        create_fact_store()
+    )
+    
+    var proposals = engine.evaluate(ctx)
+    # Should match 10 rules (every 10th rule)
+    assert proposals.count() == 10
+}

@@ -169,7 +169,7 @@ class PatternEngine {
                 Expr.Variable(newName)
             }
             is Expr.Literal -> {
-                if (e.value is String) Expr.Literal(sub(e.value, map)) else e
+                if (e.value is String) Expr.Literal(sub(e.value as String, map)) else e
             }
             is Expr.JsonObj -> Expr.JsonObj(e.fields.mapValues { subExpr(it.value, map) })
             // Recurse for Binary, Call, etc if needed

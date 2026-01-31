@@ -1,0 +1,509 @@
+# ============================================================================
+# Task Management API - Pure Somnia REST Service
+# 100% Somnia - Zero Kotlin/Java
+# ============================================================================
+
+# ============================================================================
+# DATA TYPES
+# ============================================================================
+
+class Task {
+    field id: string
+    field title: string
+    field description: string
+    field completed: bool
+    field created_at: number
+    field updated_at: number
+    field priority: string      # low, medium, high
+    field tags: list
+}
+
+# In-memory database
+var tasks = {}
+var task_counter = 0
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+fun generate_id() -> string {
+    task_counter = task_counter + 1
+    return "task_" + to_string(task_counter)
+}
+
+fun now() -> number {
+    return time_ms()
+}
+
+fun task_to_json(task: Task) -> map {
+    return {
+        "id": task.id,
+        "title": task.title,
+        "description": task.description,
+        "completed": task.completed,
+        "created_at": task.created_at,
+        "updated_at": task.updated_at,
+        "priority": task.priority,
+        "tags": task.tags
+    }
+}
+
+fun tasks_to_list() -> list {
+    var result = []
+    for id in keys(tasks) {
+        result = result + [task_to_json(tasks[id])]
+    }
+    return result
+}
+
+# ============================================================================
+# ID - The Unconscious (Rule Engine)
+# ============================================================================
+
+ID {
+    # Default drives
+    drive efficiency = 0.8
+    drive safety = 0.9
+    drive reliability = 0.95
+    
+    # =========================================================================
+    # CREATE TASK
+    # =========================================================================
+    
+    when intent("POST /tasks") {
+        var id = generate_id()
+        var task = Task {
+            id: id,
+            title: intent.body.title or "Untitled",
+            description: intent.body.description or "",
+            completed: false,
+            created_at: now(),
+            updated_at: now(),
+            priority: intent.body.priority or "medium",
+            tags: intent.body.tags or []
+        }
+        
+        tasks[id] = task
+        
+        => respond(201, task_to_json(task)) @0.9
+    }
+    
+    # =========================================================================
+    # LIST TASKS
+    # =========================================================================
+    
+    when intent("GET /tasks") {
+        var all_tasks = tasks_to_list()
+        
+        # Filter by completed status if specified
+        when intent.query.completed != null {
+            var filter_completed = intent.query.completed == "true"
+            all_tasks = filter(all_tasks, fun(t) {
+                return t.completed == filter_completed
+            })
+        }
+        
+        # Filter by priority if specified
+        when intent.query.priority != null {
+            all_tasks = filter(all_tasks, fun(t) {
+                return t.priority == intent.query.priority
+            })
+        }
+        
+        # Sort by created_at descending
+        all_tasks = sort(all_tasks, fun(a, b) {
+            return b.created_at - a.created_at
+        })
+        
+        => respond(200, {
+            "tasks": all_tasks,
+            "count": len(all_tasks)
+        }) @0.9
+    }
+    
+    # =========================================================================
+    # GET SINGLE TASK
+    # =========================================================================
+    
+    when intent("GET /tasks/:id") {
+        var id = intent.params.id
+        
+        when id in tasks {
+            => respond(200, task_to_json(tasks[id])) @0.9
+        }
+        
+        => respond(404, {
+            "error": "Task not found",
+            "id": id
+        }) @0.8
+    }
+    
+    # =========================================================================
+    # UPDATE TASK
+    # =========================================================================
+    
+    when intent("PUT /tasks/:id") {
+        var id = intent.params.id
+        
+        when id in tasks {
+            var task = tasks[id]
+            
+            when intent.body.title != null {
+                task.title = intent.body.title
+            }
+            when intent.body.description != null {
+                task.description = intent.body.description
+            }
+            when intent.body.completed != null {
+                task.completed = intent.body.completed
+            }
+            when intent.body.priority != null {
+                task.priority = intent.body.priority
+            }
+            when intent.body.tags != null {
+                task.tags = intent.body.tags
+            }
+            
+            task.updated_at = now()
+            tasks[id] = task
+            
+            => respond(200, task_to_json(task)) @0.9
+        }
+        
+        => respond(404, {
+            "error": "Task not found",
+            "id": id
+        }) @0.8
+    }
+    
+    # =========================================================================
+    # PATCH TASK (Complete/Uncomplete)
+    # =========================================================================
+    
+    when intent("PATCH /tasks/:id/complete") {
+        var id = intent.params.id
+        
+        when id in tasks {
+            tasks[id].completed = true
+            tasks[id].updated_at = now()
+            
+            => respond(200, task_to_json(tasks[id])) @0.9
+        }
+        
+        => respond(404, { "error": "Task not found" }) @0.8
+    }
+    
+    when intent("PATCH /tasks/:id/uncomplete") {
+        var id = intent.params.id
+        
+        when id in tasks {
+            tasks[id].completed = false
+            tasks[id].updated_at = now()
+            
+            => respond(200, task_to_json(tasks[id])) @0.9
+        }
+        
+        => respond(404, { "error": "Task not found" }) @0.8
+    }
+    
+    # =========================================================================
+    # DELETE TASK
+    # =========================================================================
+    
+    when intent("DELETE /tasks/:id") {
+        var id = intent.params.id
+        
+        when id in tasks {
+            var deleted_task = tasks[id]
+            delete tasks[id]
+            
+            => respond(200, {
+                "message": "Task deleted",
+                "task": task_to_json(deleted_task)
+            }) @0.9
+        }
+        
+        => respond(404, {
+            "error": "Task not found",
+            "id": id
+        }) @0.8
+    }
+    
+    # =========================================================================
+    # BULK OPERATIONS
+    # =========================================================================
+    
+    when intent("POST /tasks/bulk") {
+        var created = []
+        
+        for task_data in intent.body.tasks {
+            var id = generate_id()
+            var task = Task {
+                id: id,
+                title: task_data.title or "Untitled",
+                description: task_data.description or "",
+                completed: false,
+                created_at: now(),
+                updated_at: now(),
+                priority: task_data.priority or "medium",
+                tags: task_data.tags or []
+            }
+            tasks[id] = task
+            created = created + [task_to_json(task)]
+        }
+        
+        => respond(201, {
+            "message": "Tasks created",
+            "tasks": created,
+            "count": len(created)
+        }) @0.9
+    }
+    
+    when intent("DELETE /tasks/completed") {
+        var deleted_count = 0
+        var to_delete = []
+        
+        for id in keys(tasks) {
+            when tasks[id].completed {
+                to_delete = to_delete + [id]
+            }
+        }
+        
+        for id in to_delete {
+            delete tasks[id]
+            deleted_count = deleted_count + 1
+        }
+        
+        => respond(200, {
+            "message": "Completed tasks deleted",
+            "count": deleted_count
+        }) @0.9
+    }
+    
+    # =========================================================================
+    # STATISTICS
+    # =========================================================================
+    
+    when intent("GET /tasks/stats") {
+        var total = len(keys(tasks))
+        var completed = 0
+        var by_priority = { "low": 0, "medium": 0, "high": 0 }
+        
+        for id in keys(tasks) {
+            when tasks[id].completed {
+                completed = completed + 1
+            }
+            var p = tasks[id].priority
+            by_priority[p] = by_priority[p] + 1
+        }
+        
+        => respond(200, {
+            "total": total,
+            "completed": completed,
+            "pending": total - completed,
+            "by_priority": by_priority,
+            "completion_rate": if total > 0 then (completed / total * 100) else 0
+        }) @0.9
+    }
+    
+    # =========================================================================
+    # HEALTH CHECK
+    # =========================================================================
+    
+    when intent("GET /health") {
+        => respond(200, {
+            "status": "healthy",
+            "service": "Task Management API",
+            "version": "1.0.0",
+            "uptime_ms": time_ms()
+        }) @1.0
+    }
+    
+    # =========================================================================
+    # DEFAULT - 404
+    # =========================================================================
+    
+    default {
+        => respond(404, {
+            "error": "Not found",
+            "path": intent.path,
+            "method": intent.method
+        }) @0.5
+    }
+}
+
+# ============================================================================
+# EGO - The Subconscious (Policy Layer)
+# ============================================================================
+
+EGO {
+    # Rate limiting
+    budget "respond" = 1000 per 60s
+    
+    # Validation policies
+    forbid when intent.body.title == "" and intent("POST /tasks") {
+        reason: "Title cannot be empty"
+        => respond(400, { "error": "Title is required" })
+    }
+    
+    forbid when len(intent.body.title) > 200 and intent("POST /tasks") {
+        reason: "Title too long"
+        => respond(400, { "error": "Title must be 200 characters or less" })
+    }
+    
+    # Selection
+    select top 1
+    on_tie: rule_order
+}
+
+# ============================================================================
+# ACT - The Conscious (Execution Layer)
+# ============================================================================
+
+ACT {
+    # respond(status, body) - Send HTTP response
+    action respond(status: number, body: any) {
+        http_respond(status, body)
+    }
+    
+    # log(message) - Log to console
+    action log(message: string) {
+        println("[LOG] " + message)
+    }
+}
+
+# ============================================================================
+# SERVER CONFIGURATION
+# ============================================================================
+
+server {
+    host: "0.0.0.0"
+    port: 8080
+    
+    on_start {
+        println("╔═══════════════════════════════════════════════════════════════╗")
+        println("║     TASK MANAGEMENT API                                       ║")
+        println("║     100% Pure Somnia                                          ║")
+        println("╚═══════════════════════════════════════════════════════════════╝")
+        println("")
+        println("Server running at http://localhost:8080")
+        println("")
+        println("Endpoints:")
+        println("  GET    /health              - Health check")
+        println("  GET    /tasks               - List all tasks")
+        println("  GET    /tasks/:id           - Get single task")
+        println("  POST   /tasks               - Create task")
+        println("  PUT    /tasks/:id           - Update task")
+        println("  PATCH  /tasks/:id/complete  - Mark complete")
+        println("  DELETE /tasks/:id           - Delete task")
+        println("  GET    /tasks/stats         - Statistics")
+        println("")
+    }
+}
+
+# ============================================================================
+# TESTS
+# ============================================================================
+
+test "Create task" {
+    var response = simulate_request("POST", "/tasks", {
+        "title": "Test Task",
+        "description": "A test task",
+        "priority": "high"
+    })
+    
+    assert response.status == 201
+    assert response.body.title == "Test Task"
+    assert response.body.priority == "high"
+    assert response.body.completed == false
+}
+
+test "List tasks" {
+    # Create some tasks first
+    simulate_request("POST", "/tasks", { "title": "Task 1" })
+    simulate_request("POST", "/tasks", { "title": "Task 2" })
+    
+    var response = simulate_request("GET", "/tasks", {})
+    
+    assert response.status == 200
+    assert response.body.count >= 2
+}
+
+test "Get single task" {
+    var create = simulate_request("POST", "/tasks", { "title": "Find Me" })
+    var id = create.body.id
+    
+    var response = simulate_request("GET", "/tasks/" + id, {})
+    
+    assert response.status == 200
+    assert response.body.title == "Find Me"
+}
+
+test "Update task" {
+    var create = simulate_request("POST", "/tasks", { "title": "Original" })
+    var id = create.body.id
+    
+    var response = simulate_request("PUT", "/tasks/" + id, {
+        "title": "Updated",
+        "priority": "low"
+    })
+    
+    assert response.status == 200
+    assert response.body.title == "Updated"
+    assert response.body.priority == "low"
+}
+
+test "Complete task" {
+    var create = simulate_request("POST", "/tasks", { "title": "Complete Me" })
+    var id = create.body.id
+    
+    var response = simulate_request("PATCH", "/tasks/" + id + "/complete", {})
+    
+    assert response.status == 200
+    assert response.body.completed == true
+}
+
+test "Delete task" {
+    var create = simulate_request("POST", "/tasks", { "title": "Delete Me" })
+    var id = create.body.id
+    
+    var response = simulate_request("DELETE", "/tasks/" + id, {})
+    
+    assert response.status == 200
+    
+    # Verify deleted
+    var get = simulate_request("GET", "/tasks/" + id, {})
+    assert get.status == 404
+}
+
+test "Task not found" {
+    var response = simulate_request("GET", "/tasks/nonexistent", {})
+    assert response.status == 404
+    assert response.body.error == "Task not found"
+}
+
+test "Health check" {
+    var response = simulate_request("GET", "/health", {})
+    
+    assert response.status == 200
+    assert response.body.status == "healthy"
+}
+
+test "Statistics" {
+    # Reset
+    tasks = {}
+    
+    # Create tasks
+    simulate_request("POST", "/tasks", { "title": "T1", "priority": "high" })
+    simulate_request("POST", "/tasks", { "title": "T2", "priority": "low" })
+    var r = simulate_request("POST", "/tasks", { "title": "T3", "priority": "high" })
+    simulate_request("PATCH", "/tasks/" + r.body.id + "/complete", {})
+    
+    var stats = simulate_request("GET", "/tasks/stats", {})
+    
+    assert stats.status == 200
+    assert stats.body.total == 3
+    assert stats.body.completed == 1
+    assert stats.body.pending == 2
+    assert stats.body.by_priority.high == 2
+}

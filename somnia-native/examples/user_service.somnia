@@ -1,0 +1,145 @@
+# ============================================================================
+# User Service Agent
+# A cognitive agent for handling user management requests
+# ============================================================================
+
+module "user-service"
+version "1.0.0"
+
+# ID Block - The Unconscious (Rules)
+ID {
+    # Drives (motivations)
+    drive efficiency = 0.8
+    drive safety = 0.9
+    drive user_satisfaction = 0.7
+    
+    # Affects (emotional modifiers)
+    affect calm = 0.6
+    affect alert = 0.3
+    
+    # =========================================================================
+    # User Creation Rules
+    # =========================================================================
+    
+    # When user requests creation with valid email
+    when intent("create_user") and fact("email_valid")
+        => propose log(message: "Creating user...", level: "INFO") @0.9
+    
+    # When email is invalid, reject
+    when intent("create_user") and not fact("email_valid")
+        => propose log(message: "Invalid email provided", level: "WARN") @0.85
+    
+    # =========================================================================
+    # User Query Rules
+    # =========================================================================
+    
+    # Fast path: use cache when available
+    when intent("get_user") and fact("cache_enabled") and drive(efficiency) > 0.5
+        => propose log(message: "Using cache for query", level: "DEBUG") @0.8
+    
+    # Slow path: query database
+    when intent("get_user")
+        => propose log(message: "Querying database", level: "INFO") @0.6
+    
+    # =========================================================================
+    # Processing Rules
+    # =========================================================================
+    
+    # High efficiency mode
+    when intent("process") and drive(efficiency) > 0.7
+        => propose log(message: "Fast processing enabled", level: "INFO") @0.95
+    
+    # Safety mode
+    when intent("process") and drive(safety) > 0.8
+        => propose log(message: "Safe processing mode", level: "INFO") @0.9
+    
+    # =========================================================================
+    # Utility Rules
+    # =========================================================================
+    
+    # Greeting
+    when intent("greet")
+        => propose log(message: "Hello from Somnia Agent!", level: "INFO") @0.9
+    
+    # Health check
+    when intent("health")
+        => propose log(message: "Agent is healthy", level: "INFO") @1.0
+    
+    # Wait/delay action
+    when intent("wait")
+        => propose sleep(ms: 500) @0.7
+}
+
+# EGO Block - The Subconscious (Policies)
+EGO {
+    # =========================================================================
+    # Forbid Rules
+    # =========================================================================
+    
+    # Don't allow dangerous operations in danger mode
+    forbid when fact("danger_mode") action == "http.post"
+    
+    # Don't allow database writes when read_only
+    forbid when fact("read_only") action == "db.exec"
+    
+    # =========================================================================
+    # Budget Limits
+    # =========================================================================
+    
+    # Max 100 logs per minute
+    budget "log" max 100 per minute
+    
+    # Max 10 HTTP calls per second
+    budget "http.get" max 10 per second
+    budget "http.post" max 5 per second
+    
+    # Max 50 DB queries per minute
+    budget "db.query" max 50 per minute
+    
+    # =========================================================================
+    # Selection
+    # =========================================================================
+    
+    # Select top 2 proposals
+    select top 2
+    
+    # Use rule order for ties
+    on_tie use rule_order
+}
+
+# ACT Block - The Conscious (Action Definitions)
+ACT {
+    # These are pre-registered in C, but we can declare schemas here
+    
+    action log {
+        # Input: message (string), level (string)
+        # Output: success (bool)
+        # Timeout: 100ms
+    }
+    
+    action sleep {
+        # Input: ms (number)
+        # Output: slept_ms (number)
+        # Timeout: 60s
+    }
+    
+    action http.get {
+        # Input: url (string)
+        # Output: response (string)
+        # Timeout: 30s
+        # Retries: 3 with exponential backoff
+    }
+    
+    action http.post {
+        # Input: url (string), body (string)
+        # Output: response (string)
+        # Timeout: 30s
+        # Retries: 2
+    }
+    
+    action respond {
+        # Input: status (number), body (string)
+        # Output: sent (bool)
+        # Timeout: 100ms
+    }
+}

@@ -1,0 +1,413 @@
+# ============================================================================
+# Somnia Core Library - Runtime
+# Self-hosted full agent cycle
+# ============================================================================
+
+import "types.somnia"
+import "proposal.somnia"
+import "context.somnia"
+import "id_engine.somnia"
+import "ego.somnia"
+import "act.somnia"
+
+# ============================================================================
+# TRACE - Execution trace for debugging
+# ============================================================================
+
+class Trace {
+    field cycle_id: string
+    field timestamp: number
+    field intent_name: string
+    field id_duration_ms: number
+    field proposals_count: number
+    field ego_duration_ms: number
+    field selected_count: number
+    field rejected_count: number
+    field act_duration_ms: number
+    field results: list
+    field total_duration_ms: number
+    
+    method to_json() -> string {
+        return native_to_json({
+            "cycle_id": self.cycle_id,
+            "timestamp": self.timestamp,
+            "intent": self.intent_name,
+            "id": { "duration_ms": self.id_duration_ms, "proposals": self.proposals_count },
+            "ego": { "duration_ms": self.ego_duration_ms, "selected": self.selected_count, "rejected": self.rejected_count },
+            "act": { "duration_ms": self.act_duration_ms, "results": len(self.results) },
+            "total_ms": self.total_duration_ms
+        })
+    }
+}
+
+fun create_trace() -> Trace {
+    return Trace {
+        cycle_id: "",
+        timestamp: 0,
+        intent_name: "",
+        id_duration_ms: 0,
+        proposals_count: 0,
+        ego_duration_ms: 0,
+        selected_count: 0,
+        rejected_count: 0,
+        act_duration_ms: 0,
+        results: [],
+        total_duration_ms: 0
+    }
+}
+
+# ============================================================================
+# CYCLE RESULT
+# ============================================================================
+
+class CycleResult {
+    field proposals: ProposalList
+    field selection: SelectionResult
+    field results: list                 # List of ActionResult
+    field trace: Trace
+    field response: Value               # Response set by 'respond' action
+    
+    method is_success() -> bool {
+        for r in self.results {
+            when not r.is_success() => return false
+        }
+        return true
+    }
+    
+    method first_error() -> ActionResult {
+        for r in self.results {
+            when r.is_error() => return r
+        }
+        return null
+    }
+}
+
+fun create_cycle_result() -> CycleResult {
+    return CycleResult {
+        proposals: create_proposal_list(),
+        selection: create_selection_result(),
+        results: [],
+        trace: create_trace(),
+        response: value_null()
+    }
+}
+
+# ============================================================================
+# RUNTIME CONFIG
+# ============================================================================
+
+class RuntimeConfig {
+    field seed: number                  # Random seed for determinism
+    field enable_tracing: bool          # Enable trace generation
+    field deterministic_mode: bool      # Force deterministic execution
+    field max_cycles: number            # Max cycles per request
+}
+
+fun default_config() -> RuntimeConfig {
+    return RuntimeConfig {
+        seed: native_time_ms(),
+        enable_tracing: true,
+        deterministic_mode: true,
+        max_cycles: 100
+    }
+}
+
+# ============================================================================
+# RUNTIME - The Full Agent
+# ============================================================================
+
+class Runtime {
+    field id: IdEngine
+    field ego: Ego
+    field act: Act
+    field config: RuntimeConfig
+    field facts: FactStore
+    field memory: map
+    field total_cycles: number
+    field last_trace: Trace
+    
+    method run_cycle(intent: Intent) -> CycleResult {
+        var cycle_start = native_time_ms()
+        var result = create_cycle_result()
+        var trace = create_trace()
+        
+        # Setup trace
+        trace.cycle_id = "cycle_" + native_to_string(cycle_start) + "_" + native_to_string(self.total_cycles)
+        trace.timestamp = cycle_start
+        trace.intent_name = intent.name
+        
+        # Create execution context
+        var ctx = create_execution_context_with_seed(intent, self.facts, self.config.seed)
+        
+        # =====================================================================
+        # ID PHASE: Generate proposals
+        # =====================================================================
+        var id_start = native_time_ms()
+        
+        var proposals = self.id.evaluate(ctx)
+        
+        var id_end = native_time_ms()
+        trace.id_duration_ms = id_end - id_start
+        trace.proposals_count = proposals.count()
+        result.proposals = proposals
+        
+        native_log("DEBUG", "[ID] Generated " + native_to_string(proposals.count()) + " proposals")
+        
+        # =====================================================================
+        # EGO PHASE: Select proposals
+        # =====================================================================
+        var ego_start = native_time_ms()
+        
+        var selection = self.ego.select(proposals, ctx)
+        
+        var ego_end = native_time_ms()
+        trace.ego_duration_ms = ego_end - ego_start
+        trace.selected_count = selection.selected_count()
+        trace.rejected_count = selection.rejected_count()
+        result.selection = selection
+        
+        native_log("DEBUG", "[EGO] Selected " + native_to_string(selection.selected_count()) + 
+                   ", Rejected " + native_to_string(selection.rejected_count()))
+        
+        # =====================================================================
+        # ACT PHASE: Execute selected proposals
+        # =====================================================================
+        var act_start = native_time_ms()
+        
+        var action_results = self.act.execute_all(selection.selected)
+        
+        var act_end = native_time_ms()
+        trace.act_duration_ms = act_end - act_start
+        trace.results = action_results
+        result.results = action_results
+        
+        for i in range(0, len(action_results)) {
+            var ar = action_results[i]
+            var status = if ar.is_success() then "SUCCESS" else "ERROR"
+            native_log("DEBUG", "[ACT] Action " + native_to_string(i + 1) + ": " + status)
+        }
+        
+        # =====================================================================
+        # FINALIZE
+        # =====================================================================
+        var cycle_end = native_time_ms()
+        trace.total_duration_ms = cycle_end - cycle_start
+        result.trace = trace
+        
+        self.total_cycles = self.total_cycles + 1
+        self.last_trace = trace
+        
+        # Get response if set
+        result.response = native_get_response()
+        
+        native_log("INFO", "[CYCLE] Complete in " + native_to_string(trace.total_duration_ms) + "ms")
+        
+        return result
+    }
+    
+    method set_fact(key: string, value: Value) {
+        self.facts.set(key, value)
+    }
+    
+    method get_fact(key: string) -> Value {
+        return self.facts.get(key)
+    }
+    
+    method set_memory(key: string, value: Value) {
+        self.memory[key] = value
+    }
+    
+    method get_memory(key: string) -> Value {
+        when key in self.memory => return self.memory[key]
+        return value_null()
+    }
+}
+
+fun create_runtime(id: IdEngine, ego: Ego, act: Act) -> Runtime {
+    return Runtime {
+        id: id,
+        ego: ego,
+        act: act,
+        config: default_config(),
+        facts: create_fact_store(),
+        memory: {},
+        total_cycles: 0,
+        last_trace: create_trace()
+    }
+}
+
+# ============================================================================
+# RUNTIME BUILDER
+# ============================================================================
+
+class RuntimeBuilder {
+    field id_engine: IdEngine
+    field ego_layer: Ego
+    field act_layer: Act
+    field config: RuntimeConfig
+    field initial_facts: map
+    
+    method with_id(engine: IdEngine) -> RuntimeBuilder {
+        self.id_engine = engine
+        return self
+    }
+    
+    method with_ego(ego: Ego) -> RuntimeBuilder {
+        self.ego_layer = ego
+        return self
+    }
+    
+    method with_act(act: Act) -> RuntimeBuilder {
+        self.act_layer = act
+        return self
+    }
+    
+    method with_config(config: RuntimeConfig) -> RuntimeBuilder {
+        self.config = config
+        return self
+    }
+    
+    method with_fact(key: string, value: Value) -> RuntimeBuilder {
+        self.initial_facts[key] = value
+        return self
+    }
+    
+    method seed(seed: number) -> RuntimeBuilder {
+        self.config.seed = seed
+        return self
+    }
+    
+    method build() -> Runtime {
+        var runtime = create_runtime(self.id_engine, self.ego_layer, self.act_layer)
+        runtime.config = self.config
+        
+        for key in native_keys(self.initial_facts) {
+            runtime.set_fact(key, self.initial_facts[key])
+        }
+        
+        return runtime
+    }
+}
+
+fun RUNTIME() -> RuntimeBuilder {
+    return RuntimeBuilder {
+        id_engine: create_id_engine(),
+        ego_layer: create_ego(),
+        act_layer: create_act(),
+        config: default_config(),
+        initial_facts: {}
+    }
+}
+
+# ============================================================================
+# TESTS
+# ============================================================================
+
+test "Runtime basic cycle" {
+    var id = ID()
+        .add(rule("greet")
+            .when_intent("greet")
+            .propose("log")
+            .weight(0.9)
+            .build())
+        .build()
+    
+    var ego = EGO()
+        .select_top(1)
+        .build()
+    
+    var act = ACT()
+        .with_builtins()
+        .build()
+    
+    var runtime = create_runtime(id, ego, act)
+    
+    var intent = create_intent("greet", {})
+    var result = runtime.run_cycle(intent)
+    
+    assert result.proposals.count() == 1
+    assert result.selection.selected_count() == 1
+    assert len(result.results) == 1
+    assert result.is_success() == true
+}
+
+test "Runtime with facts" {
+    var id = ID()
+        .add(rule("cache_rule")
+            .when_intent("get_data")
+            .and_fact("use_cache")
+            .propose("cache_lookup")
+            .weight(0.9)
+            .build())
+        .add(rule("db_rule")
+            .when_intent("get_data")
+            .propose("db_query")
+            .weight(0.6)
+            .build())
+        .build()
+    
+    var ego = EGO().select_top(1).build()
+    var act = ACT().with_builtins().action("cache_lookup", action_noop).action("db_query", action_noop).build()
+    
+    var runtime = create_runtime(id, ego, act)
+    
+    # Without cache fact - should use db
+    var result1 = runtime.run_cycle(create_intent("get_data", {}))
+    assert result1.selection.selected[0].proposal.action == "db_query"
+    
+    # With cache fact - should use cache
+    runtime.set_fact("use_cache", value_bool(true))
+    var result2 = runtime.run_cycle(create_intent("get_data", {}))
+    assert result2.selection.selected[0].proposal.action == "cache_lookup"
+}
+
+test "Runtime trace generation" {
+    var runtime = RUNTIME()
+        .with_id(ID().add(rule("r1").when_intent("test").propose("noop").weight(0.9).build()).build())
+        .with_ego(EGO().select_top(1).build())
+        .with_act(ACT().with_builtins().build())
+        .seed(12345)
+        .build()
+    
+    var result = runtime.run_cycle(create_intent("test", {}))
+    
+    var trace = result.trace
+    assert trace.cycle_id != ""
+    assert trace.timestamp > 0
+    assert trace.intent_name == "test"
+    assert trace.proposals_count == 1
+    assert trace.selected_count == 1
+}
+
+test "Runtime builder" {
+    var runtime = RUNTIME()
+        .with_id(ID().drive("efficiency", 0.8).build())
+        .with_ego(EGO().select_top(2).build())
+        .with_act(ACT().with_builtins().build())
+        .with_fact("env", value_string("production"))
+        .seed(12345)
+        .build()
+    
+    assert runtime.config.seed == 12345
+    assert runtime.get_fact("env").data == "production"
+}
+
+test "Runtime multiple cycles" {
+    var runtime = RUNTIME()
+        .with_id(ID()
+            .add(rule("r1").when_intent("a").propose("noop").weight(0.9).build())
+            .add(rule("r2").when_intent("b").propose("noop").weight(0.8).build())
+            .build())
+        .with_ego(EGO().select_top(1).build())
+        .with_act(ACT().with_builtins().build())
+        .build()
+    
+    var result1 = runtime.run_cycle(create_intent("a", {}))
+    var result2 = runtime.run_cycle(create_intent("b", {}))
+    var result3 = runtime.run_cycle(create_intent("a", {}))
+    
+    assert runtime.total_cycles == 3
+    assert result1.trace.intent_name == "a"
+    assert result2.trace.intent_name == "b"
+    assert result3.trace.intent_name == "a"
+}

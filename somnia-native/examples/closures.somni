@@ -1,0 +1,54 @@
+# Closures and Functional Programming
+# Demonstrates closures and higher-order functions
+
+fun makeCounter() {
+    var count = 0
+    fun increment() {
+        count = count + 1
+        return count
+    }
+    return increment
+}
+
+var counter1 = makeCounter()
+var counter2 = makeCounter()
+
+println "Counter 1: " + counter1()  # 1
+println "Counter 1: " + counter1()  # 2
+println "Counter 1: " + counter1()  # 3
+
+println "Counter 2: " + counter2()  # 1 (independent)
+println "Counter 2: " + counter2()  # 2
+
+# Callback pattern
+fun repeat(n, callback) {
+    var i = 0
+    while i < n {
+        callback(i)
+        i = i + 1
+    }
+}
+
+fun printSquare(x) {
+    println x * x
+}
+
+println "Squares:"
+repeat(5, printSquare)
+
+# Accumulator pattern
+fun makeAccumulator(initial) {
+    var total = initial
+    fun add(value) {
+        total = total + value
+        return total
+    }
+    return add
+}
+
+var acc = makeAccumulator(100)
+println "Accumulator: " + acc(10)  # 110
+println "Accumulator: " + acc(50)  # 160
+println "Accumulator: " + acc(-30) # 130
+
+println "=== Done ==="

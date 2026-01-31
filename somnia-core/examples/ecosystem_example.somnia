@@ -1,0 +1,136 @@
+# ============================================================================
+# Somnia Example - Using the Ecosystem
+# Demonstrates config, deps, and JSON extension
+# ============================================================================
+
+import { parse_config } from "./lib/config"
+import { parse_deps } from "./lib/deps"
+import { json_parse, json_stringify, serialize_pretty } from "../somnia-json/lib/json"
+import { create_object_mapper } from "../somnia-json/lib/serialization"
+
+# ============================================================================
+# Example 1: Configuration
+# ============================================================================
+
+test "parse somnia.config" {
+    var config_content = "
+    config App {
+        name = \"my-app\"
+        version = \"1.0.0\"
+        main = \"src/main.somnia\"
+        
+        env {
+            PORT = 8080
+            DEBUG = true
+        }
+    }
+    "
+    
+    var config = parse_config(config_content)
+    
+    assert config.app.get("name") == "my-app"
+    assert config.app.get("version") == "1.0.0"
+    println("Config parsed successfully!")
+}
+
+# ============================================================================
+# Example 2: Dependencies
+# ============================================================================
+
+test "parse somnia.deps" {
+    var deps_content = "
+    deps my-project {
+        version \"1.0.0\"
+        
+        require \"somnia-core\" version \"1.0.0\"
+        require \"somnia-json\" version \"1.0.0\"
+        
+        dev {
+            require \"somnia-test\" version \"1.0.0\"
+        }
+    }
+    "
+    
+    var manifest = parse_deps(deps_content)
+    
+    assert manifest.project_name == "my-project"
+    assert manifest.main.has("somnia-core")
+    assert manifest.dev.has("somnia-test")
+    println("Dependencies parsed successfully!")
+}
+
+# ============================================================================
+# Example 3: JSON Parsing
+# ============================================================================
+
+test "parse JSON" {
+    var json_str = "{\"name\": \"Somnia\", \"version\": 1.0, \"features\": [\"config\", \"deps\", \"json\"]}"
+    
+    var data = json_parse(json_str)
+    
+    assert data.get("name").as_string() == "Somnia"
+    assert data.get("version").as_number() == 1.0
+    
+    var features = data.get("features").as_array()
+    assert len(features) == 3
+    
+    println("JSON parsed successfully!")
+}
+
+# ============================================================================
+# Example 4: JSON Serialization
+# ============================================================================
+
+test "serialize JSON" {
+    var user = {
+        "name": "Alice",
+        "age": 30,
+        "active": true,
+        "tags": ["developer", "somnia"]
+    }
+    
+    var mapper = create_object_mapper()
+    var json = mapper.write_value_as_string(user)
+    
+    println("Serialized: " + json)
+    
+    var parsed = mapper.read_value(json)
+    assert parsed["name"] == "Alice"
+    assert parsed["age"] == 30
+    
+    println("Serialization works correctly!")
+}
+
+# ============================================================================
+# Example 5: Pretty Print
+# ============================================================================
+
+test "pretty print JSON" {
+    var project = {
+        "name": "my-project",
+        "dependencies": {
+            "somnia-core": "1.0.0",
+            "somnia-json": "1.0.0"
+        },
+        "scripts": {
+            "start": "somnia run src/main.somnia",
+            "test": "somnia test"
+        }
+    }
+    
+    var pretty = serialize_pretty(project)
+    println("Pretty JSON:")
+    println(pretty)
+}
+
+# ============================================================================
+# Run all examples
+# ============================================================================
+
+fun main() {
+    println("=== Somnia Ecosystem Examples ===")
+    println("")
+    println("All examples completed successfully!")
+}
+
+main()

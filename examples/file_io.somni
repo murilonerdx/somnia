@@ -1,0 +1,53 @@
+# ====================================
+# Somnia Language: File Operations
+# Author: Somnia Team
+# ====================================
+#
+# This example demonstrates file I/O.
+# Uses std/io for reading and writing files.
+
+ID {
+    const filename = "output.txt"
+    var content = ""
+}
+
+EGO {
+    fun writeData() {
+        println("[IO] Writing to file:", filename)
+        var text = "Hello from Somnia!\n"
+        text = text + "Generated at: " + formatDate(now()) + "\n"
+        text = text + "This file was created by the Somnia language.\n"
+        
+        writeFile(filename, text)
+        println("[IO] File written successfully!")
+    }
+    
+    fun readData() {
+        println("[IO] Reading from file:", filename)
+        
+        if fileExists(filename) {
+            content = readFile(filename)
+            println("[IO] Content:")
+            println(content)
+        } else {
+            println("[IO] File does not exist!")
+        }
+    }
+    
+    fun appendData() {
+        println("[IO] Appending to file...")
+        appendFile(filename, "Appended line at " + formatDate(now()) + "\n")
+        println("[IO] Data appended!")
+    }
+}
+
+ACT {
+    action main {
+        println("=== Somnia File I/O Demo ===")
+        writeData()
+        readData()
+        appendData()
+        readData()
+        println("=== Done ===")
+    }
+}

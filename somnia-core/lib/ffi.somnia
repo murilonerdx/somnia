@@ -1,0 +1,329 @@
+# ============================================================================
+# Somnia Core Library - FFI Bridge
+# Foreign Function Interface for JVM integration (Model A)
+# ============================================================================
+
+import "types.somnia"
+import "act.somnia"
+
+# ============================================================================
+# FFI ACTION - Bridge to JVM/Native code
+# ============================================================================
+
+# FFI actions are registered from Java/Native with this pattern:
+#   @SomniaAction("userService.create")
+#   public CreateUserResult create(CreateUserInput in, SomniaContext ctx) { ... }
+
+class FFIAction {
+    field name: string              # Action name (e.g., "userService.create")
+    field module: string            # Module name (e.g., "userService")
+    field method: string            # Method name (e.g., "create")
+    field input_schema: map         # Input parameter types
+    field output_schema: map        # Output type
+    field timeout_ms: number
+    field retries: number
+    field capabilities: list        # Required capabilities (e.g., ["db", "http"])
+}
+
+fun create_ffi_action(name: string) -> FFIAction {
+    var parts = name.split(".")
+    var module = if len(parts) > 1 then parts[0] else ""
+    var method = if len(parts) > 1 then parts[1] else name
+    
+    return FFIAction {
+        name: name,
+        module: module,
+        method: method,
+        input_schema: {},
+        output_schema: {},
+        timeout_ms: 30000,
+        retries: 0,
+        capabilities: []
+    }
+}
+
+# ============================================================================
+# FFI REGISTRY
+# ============================================================================
+
+class FFIRegistry {
+    field actions: map              # name -> FFIAction
+    field handlers: map             # name -> native handler reference
+    
+    method register(action: FFIAction, handler: any) {
+        self.actions[action.name] = action
+        self.handlers[action.name] = handler
+    }
+    
+    method call(name: string, args: map) -> ActionResult {
+        when not (name in self.actions) {
+            return result_error("FFI action not found: " + name, 0)
+        }
+        
+        var handler = self.handlers[name]
+        var action = self.actions[name]
+        
+        # Convert Somnia args to FFI format
+        var ffi_args = convert_to_ffi(args)
+        
+        # Call native handler
+        var ffi_result = native_ffi_call(handler, ffi_args, action.timeout_ms)
+        
+        # Convert result back to Somnia
+        return convert_from_ffi(ffi_result)
+    }
+    
+    method list() -> list {
+        return native_keys(self.actions)
+    }
+    
+    method get(name: string) -> FFIAction {
+        when name in self.actions => return self.actions[name]
+        return null
+    }
+}
+
+fun create_ffi_registry() -> FFIRegistry {
+    return FFIRegistry {
+        actions: {},
+        handlers: {}
+    }
+}
+
+# ============================================================================
+# TYPE CONVERSION
+# ============================================================================
+
+fun convert_to_ffi(value: Value) -> any {
+    when value.type == "null" => return null
+    when value.type == "bool" => return value.data
+    when value.type == "number" => return value.data
+    when value.type == "string" => return value.data
+    when value.type == "list" {
+        var result = []
+        for item in value.data {
+            result = result + [convert_to_ffi(item)]
+        }
+        return result
+    }
+    when value.type == "map" {
+        var result = {}
+        for key in native_keys(value.data) {
+            result[key] = convert_to_ffi(value.data[key])
+        }
+        return result
+    }
+    return value.data
+}
+
+fun convert_from_ffi(ffi_result: any) -> ActionResult {
+    when ffi_result == null {
+        return result_success(value_null(), 0)
+    }
+    
+    when native_type(ffi_result) == "error" {
+        return result_error(native_to_string(ffi_result), 0)
+    }
+    
+    var value = wrap_ffi_value(ffi_result)
+    return result_success(value, 0)
+}
+
+fun wrap_ffi_value(data: any) -> Value {
+    var t = native_type(data)
+    
+    when t == "null" => return value_null()
+    when t == "bool" => return value_bool(data)
+    when t == "number" => return value_number(data)
+    when t == "string" => return value_string(data)
+    when t == "list" {
+        var items = []
+        for item in data {
+            items = items + [wrap_ffi_value(item)]
+        }
+        return value_list(items)
+    }
+    when t == "map" {
+        var entries = {}
+        for key in native_keys(data) {
+            entries[key] = wrap_ffi_value(data[key])
+        }
+        return value_map(entries)
+    }
+    
+    return value_null()
+}
+
+# ============================================================================
+# FFI ACTION BUILDER - For Java plugin integration
+# ============================================================================
+
+class FFIActionBuilder {
+    field action: FFIAction
+    
+    method input(name: string, type: string) -> FFIActionBuilder {
+        self.action.input_schema[name] = type
+        return self
+    }
+    
+    method output(type: string) -> FFIActionBuilder {
+        self.action.output_schema["type"] = type
+        return self
+    }
+    
+    method timeout(ms: number) -> FFIActionBuilder {
+        self.action.timeout_ms = ms
+        return self
+    }
+    
+    method retries(n: number) -> FFIActionBuilder {
+        self.action.retries = n
+        return self
+    }
+    
+    method requires(capability: string) -> FFIActionBuilder {
+        self.action.capabilities = self.action.capabilities + [capability]
+        return self
+    }
+    
+    method build() -> FFIAction {
+        return self.action
+    }
+}
+
+fun ffi_action(name: string) -> FFIActionBuilder {
+    return FFIActionBuilder {
+        action: create_ffi_action(name)
+    }
+}
+
+# ============================================================================
+# PLUGIN MANIFEST
+# ============================================================================
+
+class PluginManifest {
+    field name: string
+    field version: string
+    field actions: list             # List of action names
+    field capabilities: list        # Provided capabilities
+    field requires: list            # Required dependencies
+}
+
+fun parse_plugin_manifest(json: string) -> PluginManifest {
+    var data = native_parse_json(json)
+    
+    return PluginManifest {
+        name: data["name"],
+        version: data["version"],
+        actions: data["actions"],
+        capabilities: data["capabilities"],
+        requires: data["requires"]
+    }
+}
+
+# ============================================================================
+# PLUGIN LOADER
+# ============================================================================
+
+class PluginLoader {
+    field registry: FFIRegistry
+    field plugins: map              # name -> PluginManifest
+    field capabilities: list        # All available capabilities
+    
+    method load(manifest: PluginManifest, handlers: map) {
+        self.plugins[manifest.name] = manifest
+        
+        # Register actions
+        for action_name in manifest.actions {
+            when action_name in handlers {
+                var action = create_ffi_action(action_name)
+                self.registry.register(action, handlers[action_name])
+            }
+        }
+        
+        # Add capabilities
+        for cap in manifest.capabilities {
+            when not (cap in self.capabilities) {
+                self.capabilities = self.capabilities + [cap]
+            }
+        }
+        
+        native_log("INFO", "[PLUGIN] Loaded " + manifest.name + " v" + manifest.version)
+    }
+    
+    method has_capability(cap: string) -> bool {
+        return cap in self.capabilities
+    }
+    
+    method get_actions() -> list {
+        return self.registry.list()
+    }
+}
+
+fun create_plugin_loader() -> PluginLoader {
+    return PluginLoader {
+        registry: create_ffi_registry(),
+        plugins: {},
+        capabilities: []
+    }
+}
+
+# ============================================================================
+# TESTS
+# ============================================================================
+
+test "FFI action creation" {
+    var action = ffi_action("userService.create")
+        .input("email", "string")
+        .input("name", "string")
+        .output("User")
+        .timeout(5000)
+        .requires("db")
+        .build()
+    
+    assert action.name == "userService.create"
+    assert action.module == "userService"
+    assert action.method == "create"
+    assert action.timeout_ms == 5000
+    assert "db" in action.capabilities
+}
+
+test "FFI value conversion" {
+    var somnia_value = value_map({
+        "name": value_string("test"),
+        "count": value_number(42),
+        "active": value_bool(true)
+    })
+    
+    var ffi_value = convert_to_ffi(somnia_value)
+    
+    assert ffi_value["name"] == "test"
+    assert ffi_value["count"] == 42
+    assert ffi_value["active"] == true
+}
+
+test "FFI action parsing" {
+    var action1 = create_ffi_action("db.query")
+    assert action1.module == "db"
+    assert action1.method == "query"
+    
+    var action2 = create_ffi_action("simple")
+    assert action2.module == ""
+    assert action2.method == "simple"
+}
+
+test "Plugin manifest" {
+    var json = native_to_json({
+        "name": "somnia-postgres",
+        "version": "1.0.0",
+        "actions": ["db.query", "db.exec"],
+        "capabilities": ["db", "transaction"],
+        "requires": ["jdk>=21"]
+    })
+    
+    var manifest = parse_plugin_manifest(json)
+    
+    assert manifest.name == "somnia-postgres"
+    assert manifest.version == "1.0.0"
+    assert len(manifest.actions) == 2
+}

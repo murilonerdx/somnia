@@ -1,0 +1,28 @@
+// Teste com funções em map
+class Teste {
+    field data
+    
+    fun setup() {
+        if (self.data == null) { self.data = {} }
+        self.data["chave1"] = fun() {
+            println("Handler executado!")
+            return "sucesso"
+        }
+        println("Registrado handler")
+    }
+    
+    fun lookup() {
+        var handler = self.data["chave1"]
+        println("Lookup result: " + native_to_string(handler != null))
+        if (handler != null) {
+            var result = handler()
+            println("Result: " + result)
+        } else {
+            println("Handler é NULL!")
+        }
+    }
+}
+
+var obj = Teste {}
+obj.setup()
+obj.lookup()

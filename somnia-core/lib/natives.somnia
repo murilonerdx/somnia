@@ -1,0 +1,142 @@
+# ============================================================================
+# Somnia Core Library - Natives
+# Native function declarations (implemented by host VM)
+# ============================================================================
+
+# ============================================================================
+# CORE NATIVES
+# These functions are implemented by the native C/JVM bootstrap
+# ============================================================================
+
+# Time
+native fun native_time_ms() -> number
+native fun native_sleep(ms: number)
+
+# Logging
+native fun native_log(level: string, message: string)
+
+# Type introspection
+native fun native_type(value: any) -> string
+native fun native_to_string(value: any) -> string
+
+# Collections
+native fun native_keys(m: map) -> list
+native fun native_sort(items: list, comparator: fun) -> list
+native fun native_compare(a: string, b: string) -> number
+native fun native_hash(value: any) -> number
+
+# JSON
+native fun native_to_json(value: any) -> string
+native fun native_parse_json(json: string) -> any
+
+# FFI
+native fun native_ffi_call(handler: any, args: map, timeout_ms: number) -> any
+native fun native_call_with_timeout(handler: fun, args: map, timeout_ms: number) -> ActionResult
+
+# Response (for HTTP host)
+native fun native_set_response(status: number, body: any)
+native fun native_get_response() -> Value
+
+# ============================================================================
+# STRING EXTENSIONS
+# ============================================================================
+
+# In Somnia, these are methods on string but implemented natively
+native fun string_starts_with(s: string, prefix: string) -> bool
+native fun string_ends_with(s: string, suffix: string) -> bool
+native fun string_substring(s: string, start: number) -> string
+native fun string_split(s: string, delimiter: string) -> list
+native fun string_length(s: string) -> number
+
+# String method wrappers
+extend string {
+    method starts_with(prefix: string) -> bool {
+        return string_starts_with(self, prefix)
+    }
+    
+    method ends_with(suffix: string) -> bool {
+        return string_ends_with(self, suffix)
+    }
+    
+    method substring(start: number) -> string {
+        return string_substring(self, start)
+    }
+    
+    method split(delimiter: string) -> list {
+        return string_split(self, delimiter)
+    }
+}
+
+# ============================================================================
+# LIST EXTENSIONS
+# ============================================================================
+
+native fun list_length(l: list) -> number
+
+# List function (built-in)
+fun len(value: any) -> number {
+    var t = native_type(value)
+    when t == "string" => return string_length(value)
+    when t == "list" => return list_length(value)
+    when t == "map" => return list_length(native_keys(value))
+    return 0
+}
+
+# Range generator
+fun range(start: number, end: number) -> list {
+    var result = []
+    var i = start
+    while i < end {
+        result = result + [i]
+        i = i + 1
+    }
+    return result
+}
+
+# ============================================================================
+# MATH NATIVES
+# ============================================================================
+
+native fun math_pow(base: number, exp: number) -> number
+native fun math_sqrt(n: number) -> number
+native fun math_abs(n: number) -> number
+native fun math_floor(n: number) -> number
+native fun math_ceil(n: number) -> number
+native fun math_random() -> number
+
+fun pow(base: number, exp: number) -> number {
+    return math_pow(base, exp)
+}
+
+fun sqrt(n: number) -> number {
+    return math_sqrt(n)
+}
+
+fun abs(n: number) -> number {
+    return math_abs(n)
+}
+
+fun floor(n: number) -> number {
+    return math_floor(n)
+}
+
+fun ceil(n: number) -> number {
+    return math_ceil(n)
+}
+
+# ============================================================================
+# I/O NATIVES (Optional, provided by plugins)
+# ============================================================================
+
+# File I/O
+native fun file_read(path: string) -> string
+native fun file_write(path: string, content: string)
+native fun file_exists(path: string) -> bool
+
+# HTTP (if http plugin loaded)
+native fun http_get(url: string) -> any
+native fun http_post(url: string, body: string) -> any
+
+# Database (if db plugin loaded)
+native fun db_query(sql: string, params: list) -> list
+native fun db_exec(sql: string, params: list) -> number

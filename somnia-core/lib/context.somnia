@@ -1,0 +1,166 @@
+# ============================================================================
+# Somnia Core Library - ExecutionContext
+# Self-hosted execution context for agent cycles
+# ============================================================================
+
+import "types.somnia"
+
+# ============================================================================
+# EXECUTION CONTEXT
+# All state needed for one agent cycle
+# ============================================================================
+
+class ExecutionContext {
+    field intent: Intent           # Current intent trigger
+    field facts: FactStore         # World state
+    field drives: map              # name -> Drive
+    field affects: map             # name -> Affect
+    field seed: number             # Random seed for determinism
+    field timestamp: number        # Current timestamp (ms)
+    field memory: map              # Persistent agent memory
+    
+    method get_drive(name: string) -> Drive {
+        when name in self.drives => return self.drives[name]
+        return null
+    }
+    
+    method add_drive(name: string, intensity: number) {
+        self.drives[name] = create_drive(name, intensity)
+    }
+    
+    method get_affect(name: string) -> Affect {
+        when name in self.affects => return self.affects[name]
+        return null
+    }
+    
+    method add_affect(name: string, valence: number) {
+        self.affects[name] = create_affect(name, valence)
+    }
+    
+    method get_memory(key: string) -> Value {
+        when key in self.memory => return self.memory[key]
+        return value_null()
+    }
+    
+    method set_memory(key: string, value: Value) {
+        self.memory[key] = value
+    }
+    
+    method clone() -> ExecutionContext {
+        return ExecutionContext {
+            intent: self.intent,
+            facts: self.facts,         # Note: shares reference
+            drives: clone_map(self.drives),
+            affects: clone_map(self.affects),
+            seed: self.seed,
+            timestamp: self.timestamp,
+            memory: clone_map(self.memory)
+        }
+    }
+}
+
+fun create_execution_context(intent: Intent, facts: FactStore) -> ExecutionContext {
+    return ExecutionContext {
+        intent: intent,
+        facts: facts,
+        drives: {},
+        affects: {},
+        seed: native_time_ms(),
+        timestamp: native_time_ms(),
+        memory: {}
+    }
+}
+
+fun create_execution_context_with_seed(intent: Intent, facts: FactStore, seed: number) -> ExecutionContext {
+    return ExecutionContext {
+        intent: intent,
+        facts: facts,
+        drives: {},
+        affects: {},
+        seed: seed,
+        timestamp: native_time_ms(),
+        memory: {}
+    }
+}
+
+fun clone_map(m: map) -> map {
+    var result = {}
+    for key in native_keys(m) {
+        result[key] = m[key]
+    }
+    return result
+}
+
+# ============================================================================
+# TESTS
+# ============================================================================
+
+test "ExecutionContext creation" {
+    var intent = create_intent("greet", { "name": value_string("World") })
+    var facts = create_fact_store()
+    var ctx = create_execution_context(intent, facts)
+    
+    assert ctx.intent.name == "greet"
+    assert ctx.seed > 0
+    assert ctx.timestamp > 0
+}
+
+test "ExecutionContext drives" {
+    var ctx = create_execution_context(
+        create_intent("test", {}),
+        create_fact_store()
+    )
+    
+    ctx.add_drive("efficiency", 0.8)
+    ctx.add_drive("safety", 0.9)
+    
+    var eff = ctx.get_drive("efficiency")
+    assert eff != null
+    assert eff.intensity == 0.8
+    
+    var missing = ctx.get_drive("missing")
+    assert missing == null
+}
+
+test "ExecutionContext affects" {
+    var ctx = create_execution_context(
+        create_intent("test", {}),
+        create_fact_store()
+    )
+    
+    ctx.add_affect("calm", 0.5)
+    ctx.add_affect("alert", -0.3)
+    
+    var calm = ctx.get_affect("calm")
+    assert calm != null
+    assert calm.valence == 0.5
+    assert calm.is_positive() == true
+    
+    var alert = ctx.get_affect("alert")
+    assert alert.is_negative() == true
+}
+
+test "ExecutionContext memory" {
+    var ctx = create_execution_context(
+        create_intent("test", {}),
+        create_fact_store()
+    )
+    
+    ctx.set_memory("last_user", value_string("john"))
+    
+    var last = ctx.get_memory("last_user")
+    assert last.data == "john"
+    
+    var missing = ctx.get_memory("missing")
+    assert missing.type == "null"
+}
+
+test "ExecutionContext deterministic seed" {
+    var ctx = create_execution_context_with_seed(
+        create_intent("test", {}),
+        create_fact_store(),
+        12345
+    )
+    
+    assert ctx.seed == 12345
+}

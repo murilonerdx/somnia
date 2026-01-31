@@ -1,0 +1,9 @@
+
+contract Validator<T> {
+    fun validate(item: T): Boolean
+}
+
+pattern ValidateString(Field) {
+    // This is a placeholder for how validation logic could be injected
+    // Future: bind validation logic to field setters
+}

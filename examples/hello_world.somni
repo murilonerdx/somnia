@@ -1,0 +1,41 @@
+# ====================================
+# Somnia Language: Hello World
+# Author: Somnia Team
+# ====================================
+#
+# This is the simplest Somnia program.
+# It demonstrates the basic structure: ID, EGO, ACT blocks.
+
+ID {
+    # ID (Unconscious) - The memory, constants, data
+    const version = "1.0.0"
+    const appName = "Hello Somnia"
+    
+    var greeting = "Hello, World!"
+    var counter = 0
+}
+
+EGO {
+    # EGO (Subconscious) - The logic, functions
+    
+    fun greet() {
+        println(greeting)
+        println("Welcome to", appName, "v" + version)
+    }
+    
+    fun count() {
+        counter = counter + 1
+        println("Count:", counter)
+    }
+}
+
+ACT {
+    # ACT (Conscious) - The behavior, actions
+    
+    action main {
+        greet()
+        count()
+        count()
+        count()
+    }
+}

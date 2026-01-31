@@ -1,0 +1,8 @@
+# Somnia JSON Extension Dependencies
+
+deps somnia-json {
+    version "1.0.0"
+    
+    # Core library dependency
+    require "somnia-core" version "1.0.0" from "../somnia-core"
+}

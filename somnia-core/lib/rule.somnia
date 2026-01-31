@@ -1,0 +1,292 @@
+# ============================================================================
+# Somnia Core Library - Rule
+# Self-hosted rule definitions for ID engine
+# ============================================================================
+
+import "types.somnia"
+import "condition.somnia"
+import "proposal.somnia"
+import "context.somnia"
+
+# ============================================================================
+# RULE - When condition => propose action @weight
+# ============================================================================
+
+class Rule {
+    field id: string
+    field line: number
+    field condition: Condition
+    field action: string
+    field action_args: map          # Template for action arguments
+    field base_weight: number
+    field drive_modifiers: list     # List of {drive: string, factor: number}
+    field affect_modifiers: list    # List of {affect: string, factor: number}
+    field description: string
+    
+    method matches(ctx: ExecutionContext) -> bool {
+        return self.condition.evaluate(ctx)
+    }
+    
+    method calculate_weight(ctx: ExecutionContext) -> number {
+        var weight = self.base_weight
+        
+        # Apply drive modifiers
+        for mod in self.drive_modifiers {
+            var drive = ctx.get_drive(mod["drive"])
+            when drive != null {
+                weight = weight * (1.0 + drive.intensity * mod["factor"])
+            }
+        }
+        
+        # Apply affect modifiers
+        for mod in self.affect_modifiers {
+            var affect = ctx.get_affect(mod["affect"])
+            when affect != null {
+                weight = weight * (1.0 + affect.valence * mod["factor"])
+            }
+        }
+        
+        return clamp(weight, 0.0, 1.0)
+    }
+    
+    method generate_proposal(ctx: ExecutionContext) -> Proposal {
+        var weight = self.calculate_weight(ctx)
+        var args = resolve_action_args(self.action_args, ctx)
+        
+        return create_proposal(
+            self.action,
+            args,
+            weight,
+            self.id,
+            self.line
+        )
+    }
+    
+    method to_string() -> string {
+        return "Rule(" + self.id + ": when ... => " + self.action + " @" + native_to_string(self.base_weight) + ")"
+    }
+}
+
+# Resolve action argument templates
+fun resolve_action_args(template: map, ctx: ExecutionContext) -> map {
+    var result = {}
+    
+    for key in native_keys(template) {
+        var value = template[key]
+        
+        # If value is a string starting with $, it's a reference
+        when value.type == "string" and value.data.starts_with("$") {
+            var ref = value.data.substring(1)
+            result[key] = resolve_reference(ref, ctx)
+        }
+        else {
+            result[key] = value
+        }
+    }
+    
+    return result
+}
+
+fun resolve_reference(ref: string, ctx: ExecutionContext) -> Value {
+    when ref.starts_with("intent.") {
+        var key = ref.substring(7)
+        return ctx.intent.get(key)
+    }
+    when ref.starts_with("fact.") {
+        var key = ref.substring(5)
+        return ctx.facts.get(key)
+    }
+    when ref.starts_with("memory.") {
+        var key = ref.substring(7)
+        return ctx.get_memory(key)
+    }
+    return value_string(ref)
+}
+
+# ============================================================================
+# RULE BUILDER - Fluent API for creating rules
+# ============================================================================
+
+class RuleBuilder {
+    field rule: Rule
+    
+    method when_intent(name: string) -> RuleBuilder {
+        self.rule.condition = cond_intent(name)
+        return self
+    }
+    
+    method and_fact(key: string) -> RuleBuilder {
+        self.rule.condition = cond_and(self.rule.condition, cond_fact(key))
+        return self
+    }
+    
+    method and_not_fact(key: string) -> RuleBuilder {
+        self.rule.condition = cond_and(self.rule.condition, cond_not(cond_fact(key)))
+        return self
+    }
+    
+    method and_drive_gt(name: string, threshold: number) -> RuleBuilder {
+        self.rule.condition = cond_and(self.rule.condition, cond_drive_gt(name, threshold))
+        return self
+    }
+    
+    method propose(action: string) -> RuleBuilder {
+        self.rule.action = action
+        return self
+    }
+    
+    method with_args(args: map) -> RuleBuilder {
+        self.rule.action_args = args
+        return self
+    }
+    
+    method weight(w: number) -> RuleBuilder {
+        self.rule.base_weight = w
+        return self
+    }
+    
+    method boost_by_drive(drive: string, factor: number) -> RuleBuilder {
+        self.rule.drive_modifiers = self.rule.drive_modifiers + [{ "drive": drive, "factor": factor }]
+        return self
+    }
+    
+    method boost_by_affect(affect: string, factor: number) -> RuleBuilder {
+        self.rule.affect_modifiers = self.rule.affect_modifiers + [{ "affect": affect, "factor": factor }]
+        return self
+    }
+    
+    method describe(text: string) -> RuleBuilder {
+        self.rule.description = text
+        return self
+    }
+    
+    method build() -> Rule {
+        return self.rule
+    }
+}
+
+fun rule(id: string) -> RuleBuilder {
+    return RuleBuilder {
+        rule: Rule {
+            id: id,
+            line: 0,
+            condition: cond_true(),
+            action: "",
+            action_args: {},
+            base_weight: 0.5,
+            drive_modifiers: [],
+            affect_modifiers: [],
+            description: ""
+        }
+    }
+}
+
+fun create_rule(id: string, line: number, condition: Condition, action: string, weight: number) -> Rule {
+    return Rule {
+        id: id,
+        line: line,
+        condition: condition,
+        action: action,
+        action_args: {},
+        base_weight: weight,
+        drive_modifiers: [],
+        affect_modifiers: [],
+        description: ""
+    }
+}
+
+# ============================================================================
+# TESTS
+# ============================================================================
+
+test "Rule matching" {
+    var r = create_rule("r1", 10, cond_intent("greet"), "log", 0.9)
+    
+    var ctx_match = create_execution_context(
+        create_intent("greet", {}),
+        create_fact_store()
+    )
+    assert r.matches(ctx_match) == true
+    
+    var ctx_no_match = create_execution_context(
+        create_intent("other", {}),
+        create_fact_store()
+    )
+    assert r.matches(ctx_no_match) == false
+}
+
+test "Rule weight calculation" {
+    var r = Rule {
+        id: "r1",
+        line: 10,
+        condition: cond_true(),
+        action: "log",
+        action_args: {},
+        base_weight: 0.5,
+        drive_modifiers: [{ "drive": "efficiency", "factor": 0.5 }],
+        affect_modifiers: [],
+        description: ""
+    }
+    
+    var ctx = create_execution_context(
+        create_intent("test", {}),
+        create_fact_store()
+    )
+    ctx.add_drive("efficiency", 0.8)
+    
+    var weight = r.calculate_weight(ctx)
+    # 0.5 * (1 + 0.8 * 0.5) = 0.5 * 1.4 = 0.7
+    assert weight == 0.7
+}
+
+test "Rule proposal generation" {
+    var r = create_rule("r1", 10, cond_intent("greet"), "log", 0.9)
+    r.action_args = { "message": value_string("Hello!") }
+    
+    var ctx = create_execution_context(
+        create_intent("greet", {}),
+        create_fact_store()
+    )
+    
+    var proposal = r.generate_proposal(ctx)
+    assert proposal.action == "log"
+    assert proposal.weight == 0.9
+    assert proposal.rule_id == "r1"
+}
+
+test "RuleBuilder fluent API" {
+    var r = rule("greet_rule")
+        .when_intent("greet")
+        .and_fact("user_logged_in")
+        .propose("say_hello")
+        .with_args({ "message": value_string("Hello!") })
+        .weight(0.9)
+        .boost_by_drive("friendliness", 0.2)
+        .describe("Greet the user")
+        .build()
+    
+    assert r.id == "greet_rule"
+    assert r.action == "say_hello"
+    assert r.base_weight == 0.9
+    assert len(r.drive_modifiers) == 1
+}
+
+test "Argument template resolution" {
+    var ctx = create_execution_context(
+        create_intent("greet", { "name": value_string("World") }),
+        create_fact_store()
+    )
+    ctx.facts.set("greeting", value_string("Hello"))
+    
+    var template = {
+        "name": value_string("$intent.name"),
+        "greeting": value_string("$fact.greeting"),
+        "static": value_string("literal")
+    }
+    
+    var resolved = resolve_action_args(template, ctx)
+    
+    assert resolved["name"].data == "World"
+    assert resolved["greeting"].data == "Hello"
+    assert resolved["static"].data == "literal"
+}

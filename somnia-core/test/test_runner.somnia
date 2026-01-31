@@ -1,0 +1,400 @@
+# ============================================================================
+# Somnia Test Runner
+# Runs all tests in the core library
+# ============================================================================
+
+import "../lib/index.somnia"
+
+# ============================================================================
+# TEST FRAMEWORK
+# ============================================================================
+
+class TestResult {
+    field name: string
+    field passed: bool
+    field error: string
+    field duration_ms: number
+}
+
+class TestSuite {
+    field name: string
+    field results: list
+    field passed: number
+    field failed: number
+    field total_duration_ms: number
+    
+    method add_result(result: TestResult) {
+        self.results = self.results + [result]
+        when result.passed {
+            self.passed = self.passed + 1
+        }
+        else {
+            self.failed = self.failed + 1
+        }
+        self.total_duration_ms = self.total_duration_ms + result.duration_ms
+    }
+    
+    method summary() -> string {
+        var total = len(self.results)
+        var status = if self.failed == 0 then "PASSED" else "FAILED"
+        return self.name + ": " + native_to_string(self.passed) + "/" + native_to_string(total) + " " + status
+    }
+}
+
+fun run_test(name: string, test_fn: fun) -> TestResult {
+    var start = native_time_ms()
+    var passed = true
+    var error = ""
+    
+    try {
+        test_fn()
+    }
+    catch e {
+        passed = false
+        error = native_to_string(e)
+    }
+    
+    var duration = native_time_ms() - start
+    
+    return TestResult {
+        name: name,
+        passed: passed,
+        error: error,
+        duration_ms: duration
+    }
+}
+
+# ============================================================================
+# RUN ALL TESTS
+# ============================================================================
+
+fun run_all_tests() {
+    native_log("INFO", "")
+    native_log("INFO", "╔═══════════════════════════════════════════════════════════════╗")
+    native_log("INFO", "║              SOMNIA CORE TEST SUITE                           ║")
+    native_log("INFO", "╚═══════════════════════════════════════════════════════════════╝")
+    native_log("INFO", "")
+    
+    var total_passed = 0
+    var total_failed = 0
+    var start = native_time_ms()
+    
+    # Run each module's tests
+    var suites = [
+        run_types_tests(),
+        run_proposal_tests(),
+        run_condition_tests(),
+        run_context_tests(),
+        run_rule_tests(),
+        run_id_engine_tests(),
+        run_ego_tests(),
+        run_act_tests(),
+        run_runtime_tests(),
+        run_ffi_tests()
+    ]
+    
+    # Print results
+    for suite in suites {
+        var icon = if suite.failed == 0 then "✓" else "✗"
+        native_log("INFO", icon + " " + suite.summary())
+        
+        total_passed = total_passed + suite.passed
+        total_failed = total_failed + suite.failed
+        
+        # Print failed tests
+        for result in suite.results {
+            when not result.passed {
+                native_log("ERROR", "  ✗ " + result.name + ": " + result.error)
+            }
+        }
+    }
+    
+    var total = total_passed + total_failed
+    var duration = native_time_ms() - start
+    
+    native_log("INFO", "")
+    native_log("INFO", "═══════════════════════════════════════════════════════════════")
+    
+    when total_failed == 0 {
+        native_log("INFO", "ALL TESTS PASSED: " + native_to_string(total_passed) + "/" + native_to_string(total) + " in " + native_to_string(duration) + "ms")
+    }
+    else {
+        native_log("ERROR", "TESTS FAILED: " + native_to_string(total_passed) + "/" + native_to_string(total) + " passed, " + native_to_string(total_failed) + " failed")
+    }
+    
+    native_log("INFO", "")
+    
+    return total_failed == 0
+}
+
+# ============================================================================
+# MODULE TEST RUNNERS
+# ============================================================================
+
+fun run_types_tests() -> TestSuite {
+    var suite = TestSuite { name: "types", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
+    
+    suite.add_result(run_test("Value string truthiness", fun() {
+        var v = value_string("hello")
+        assert v.is_truthy() == true
+        var empty = value_string("")
+        assert empty.is_truthy() == false
+    }))
+    
+    suite.add_result(run_test("Value number truthiness", fun() {
+        assert value_number(0).is_truthy() == false
+        assert value_number(1).is_truthy() == true
+    }))
+    
+    suite.add_result(run_test("Value null truthiness", fun() {
+        assert value_null().is_truthy() == false
+    }))
+    
+    suite.add_result(run_test("Value equality", fun() {
+        var a = value_string("test")
+        var b = value_string("test")
+        assert a.equals(b) == true
+    }))
+    
+    suite.add_result(run_test("Intent creation", fun() {
+        var intent = create_intent("greet", { "name": value_string("World") })
+        assert intent.name == "greet"
+        assert intent.has("name") == true
+    }))
+    
+    suite.add_result(run_test("FactStore operations", fun() {
+        var store = create_fact_store()
+        store.set("key", value_bool(true))
+        assert store.has("key") == true
+        assert store.get("key").data == true
+    }))
+    
+    suite.add_result(run_test("Drive creation", fun() {
+        var drive = create_drive("efficiency", 0.8)
+        assert drive.name == "efficiency"
+        assert drive.intensity == 0.8
+    }))
+    
+    suite.add_result(run_test("Clamp function", fun() {
+        assert clamp(5, 0, 10) == 5
+        assert clamp(-5, 0, 10) == 0
+        assert clamp(15, 0, 10) == 10
+    }))
+    
+    return suite
+}
+
+fun run_proposal_tests() -> TestSuite {
+    var suite = TestSuite { name: "proposal", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
+    
+    suite.add_result(run_test("Proposal creation", fun() {
+        var p = create_proposal("log", {}, 0.9, "r1", 10)
+        assert p.action == "log"
+        assert p.weight == 0.9
+    }))
+    
+    suite.add_result(run_test("Proposal weight clamping", fun() {
+        var p = create_proposal("test", {}, 1.5, "r1", 1)
+        assert p.weight == 1.0
+    }))
+    
+    suite.add_result(run_test("ProposalList operations", fun() {
+        var list = create_proposal_list()
+        assert list.is_empty() == true
+        list.add(create_proposal("a", {}, 0.5, "r1", 1))
+        assert list.count() == 1
+    }))
+    
+    suite.add_result(run_test("ProposalList sorting", fun() {
+        var list = create_proposal_list()
+        list.add(create_proposal("low", {}, 0.3, "r1", 1))
+        list.add(create_proposal("high", {}, 0.9, "r2", 2))
+        list.sort_by_weight()
+        assert list.get(0).action == "high"
+    }))
+    
+    return suite
+}
+
+fun run_condition_tests() -> TestSuite {
+    var suite = TestSuite { name: "condition", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
+    
+    suite.add_result(run_test("Intent matching", fun() {
+        var ctx = create_test_context("greet", {})
+        assert cond_intent("greet").evaluate(ctx) == true
+        assert cond_intent("other").evaluate(ctx) == false
+    }))
+    
+    suite.add_result(run_test("Fact exists", fun() {
+        var ctx = create_test_context("test", {})
+        ctx.facts.set("key", value_bool(true))
+        assert cond_fact("key").evaluate(ctx) == true
+        assert cond_fact("missing").evaluate(ctx) == false
+    }))
+    
+    suite.add_result(run_test("AND condition", fun() {
+        var ctx = create_test_context("greet", {})
+        ctx.facts.set("logged_in", value_bool(true))
+        var both = cond_and(cond_intent("greet"), cond_fact("logged_in"))
+        assert both.evaluate(ctx) == true
+    }))
+    
+    suite.add_result(run_test("NOT condition", fun() {
+        var ctx = create_test_context("greet", {})
+        assert cond_not(cond_intent("greet")).evaluate(ctx) == false
+        assert cond_not(cond_intent("other")).evaluate(ctx) == true
+    }))
+    
+    return suite
+}
+
+fun run_context_tests() -> TestSuite {
+    var suite = TestSuite { name: "context", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
+    
+    suite.add_result(run_test("Context creation", fun() {
+        var ctx = create_execution_context(create_intent("test", {}), create_fact_store())
+        assert ctx.intent.name == "test"
+    }))
+    
+    suite.add_result(run_test("Context drives", fun() {
+        var ctx = create_execution_context(create_intent("test", {}), create_fact_store())
+        ctx.add_drive("eff", 0.8)
+        assert ctx.get_drive("eff").intensity == 0.8
+    }))
+    
+    return suite
+}
+
+fun run_rule_tests() -> TestSuite {
+    var suite = TestSuite { name: "rule", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
+    
+    suite.add_result(run_test("Rule matching", fun() {
+        var r = create_rule("r1", 10, cond_intent("greet"), "log", 0.9)
+        var ctx = create_execution_context(create_intent("greet", {}), create_fact_store())
+        assert r.matches(ctx) == true
+    }))
+    
+    suite.add_result(run_test("Rule proposal generation", fun() {
+        var r = create_rule("r1", 10, cond_intent("greet"), "log", 0.9)
+        var ctx = create_execution_context(create_intent("greet", {}), create_fact_store())
+        var p = r.generate_proposal(ctx)
+        assert p.action == "log"
+        assert p.weight == 0.9
+    }))
+    
+    return suite
+}
+
+fun run_id_engine_tests() -> TestSuite {
+    var suite = TestSuite { name: "id_engine", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
+    
+    suite.add_result(run_test("ID evaluation", fun() {
+        var engine = create_id_engine()
+        engine.add_rule(create_rule("r1", 10, cond_intent("greet"), "log", 0.9))
+        var ctx = create_execution_context(create_intent("greet", {}), create_fact_store())
+        var proposals = engine.evaluate(ctx)
+        assert proposals.count() == 1
+    }))
+    
+    suite.add_result(run_test("ID DSL", fun() {
+        var engine = ID().drive("eff", 0.8).build()
+        assert engine.default_drives["eff"] == 0.8
+    }))
+    
+    return suite
+}
+
+fun run_ego_tests() -> TestSuite {
+    var suite = TestSuite { name: "ego", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
+    
+    suite.add_result(run_test("EGO forbid", fun() {
+        var ego = create_ego()
+        ego.add_forbid(create_forbid_policy("no_all", cond_true(), "", "blocked"))
+        var proposals = create_proposal_list()
+        proposals.add(create_proposal("log", {}, 0.9, "r1", 10))
+        var ctx = create_execution_context(create_intent("test", {}), create_fact_store())
+        var result = ego.select(proposals, ctx)
+        assert result.rejected_count() == 1
+    }))
+    
+    suite.add_result(run_test("EGO select top", fun() {
+        var ego = EGO().select_top(2).build()
+        var proposals = create_proposal_list()
+        proposals.add(create_proposal("a", {}, 0.9, "r1", 1))
+        proposals.add(create_proposal("b", {}, 0.8, "r2", 2))
+        proposals.add(create_proposal("c", {}, 0.7, "r3", 3))
+        var ctx = create_execution_context(create_intent("test", {}), create_fact_store())
+        var result = ego.select(proposals, ctx)
+        assert result.selected_count() == 2
+    }))
+    
+    return suite
+}
+
+fun run_act_tests() -> TestSuite {
+    var suite = TestSuite { name: "act", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
+    
+    suite.add_result(run_test("ActionResult success", fun() {
+        var r = result_success(value_string("ok"), 100)
+        assert r.is_success() == true
+    }))
+    
+    suite.add_result(run_test("ActionRegistry", fun() {
+        var reg = create_registry()
+        reg.register(create_action("noop", action_noop))
+        assert reg.has("noop") == true
+    }))
+    
+    suite.add_result(run_test("ACT DSL", fun() {
+        var act = ACT().with_builtins().build()
+        assert act.registry.has("log") == true
+    }))
+    
+    return suite
+}
+
+fun run_runtime_tests() -> TestSuite {
+    var suite = TestSuite { name: "runtime", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
+    
+    suite.add_result(run_test("Runtime cycle", fun() {
+        var runtime = RUNTIME()
+            .with_id(ID().add(rule("r1").when_intent("test").propose("noop").weight(0.9).build()).build())
+            .with_ego(EGO().select_top(1).build())
+            .with_act(ACT().with_builtins().build())
+            .build()
+        var result = runtime.run_cycle(create_intent("test", {}))
+        assert result.is_success() == true
+    }))
+    
+    suite.add_result(run_test("Runtime builder", fun() {
+        var runtime = RUNTIME().seed(12345).build()
+        assert runtime.config.seed == 12345
+    }))
+    
+    return suite
+}
+
+fun run_ffi_tests() -> TestSuite {
+    var suite = TestSuite { name: "ffi", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
+    
+    suite.add_result(run_test("FFI action creation", fun() {
+        var action = ffi_action("userService.create").timeout(5000).build()
+        assert action.name == "userService.create"
+        assert action.module == "userService"
+    }))
+    
+    suite.add_result(run_test("Value conversion", fun() {
+        var v = value_map({ "name": value_string("test") })
+        var ffi = convert_to_ffi(v)
+        assert ffi["name"] == "test"
+    }))
+    
+    return suite
+}
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+# Run tests when this file is executed
+run_all_tests()
