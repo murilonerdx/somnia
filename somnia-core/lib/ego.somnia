@@ -18,7 +18,7 @@ class ForbidPolicy {
     field action_pattern: string       # Optional: specific action to block
     field reason: string               # Why forbidden
     
-    method matches(proposal: Proposal, ctx: ExecutionContext) -> bool {
+    method matches(proposal: Proposal, ctx: ExecutionContext) {
         # Check if condition matches
         when not self.condition.evaluate(ctx) => return false
         
@@ -33,7 +33,7 @@ class ForbidPolicy {
     }
 }
 
-fun create_forbid_policy(id: string, condition: Condition, action_pattern: string, reason: string) -> ForbidPolicy {
+fun create_forbid_policy(id: string, condition: Condition, action_pattern: string, reason: string) {
     return ForbidPolicy {
         id: id,
         condition: condition,
@@ -53,7 +53,7 @@ class BudgetPolicy {
     field current_count: number
     field window_start: number
     
-    method check(proposal: Proposal, timestamp: number) -> bool {
+    method check(proposal: Proposal, timestamp: number) {
         when proposal.action != self.action => return true
         
         # Reset window if expired
@@ -77,12 +77,12 @@ class BudgetPolicy {
         self.current_count = self.current_count + 1
     }
     
-    method remaining() -> number {
+    method remaining() {
         return max(0, self.max_count - self.current_count)
     }
 }
 
-fun create_budget_policy(action: string, max_count: number, window_seconds: number) -> BudgetPolicy {
+fun create_budget_policy(action: string, max_count: number, window_seconds: number) {
     return BudgetPolicy {
         action: action,
         max_count: max_count,
@@ -100,7 +100,7 @@ const TIE_RULE_ORDER = "rule_order"
 const TIE_ALPHABETICAL = "alphabetical"
 const TIE_HASH = "hash"
 
-fun break_tie(proposals: list, method: string, seed: number) -> list {
+fun break_tie(proposals: list, method: string, seed: number) {
     when method == TIE_RULE_ORDER {
         return native_sort(proposals, fun(a, b) {
             return a.rule_line - b.rule_line
@@ -131,7 +131,7 @@ class EgoConfig {
     field min_weight: number
 }
 
-fun default_ego_config() -> EgoConfig {
+fun default_ego_config() {
     return EgoConfig {
         select_top_n: 1,
         tie_breaker: TIE_RULE_ORDER,
@@ -161,7 +161,7 @@ class Ego {
         self.config = config
     }
     
-    method select(proposals: ProposalList, ctx: ExecutionContext) -> SelectionResult {
+    method select(proposals: ProposalList, ctx: ExecutionContext) {
         var result = create_selection_result()
         var timestamp = ctx.timestamp
         
@@ -244,7 +244,7 @@ class Ego {
     }
 }
 
-fun create_ego() -> Ego {
+fun create_ego() {
     return Ego {
         forbid_policies: [],
         budget_policies: [],
@@ -259,7 +259,7 @@ fun create_ego() -> Ego {
 class EgoBlock {
     field ego: Ego
     
-    method forbid_when(condition: Condition, reason: string) -> EgoBlock {
+    method forbid_when(condition: Condition, reason: string) {
         self.ego.add_forbid(create_forbid_policy(
             "forbid_" + native_to_string(len(self.ego.forbid_policies) + 1),
             condition,
@@ -269,7 +269,7 @@ class EgoBlock {
         return self
     }
     
-    method forbid_action(action: string, condition: Condition, reason: string) -> EgoBlock {
+    method forbid_action(action: string, condition: Condition, reason: string) {
         self.ego.add_forbid(create_forbid_policy(
             "forbid_" + action,
             condition,
@@ -279,32 +279,32 @@ class EgoBlock {
         return self
     }
     
-    method budget(action: string, max_count: number, window_seconds: number) -> EgoBlock {
+    method budget(action: string, max_count: number, window_seconds: number) {
         self.ego.add_budget(create_budget_policy(action, max_count, window_seconds))
         return self
     }
     
-    method select_top(n: number) -> EgoBlock {
+    method select_top(n: number) {
         self.ego.config.select_top_n = n
         return self
     }
     
-    method min_weight(w: number) -> EgoBlock {
+    method min_weight(w: number) {
         self.ego.config.min_weight = w
         return self
     }
     
-    method on_tie(method: string) -> EgoBlock {
+    method on_tie(method: string) {
         self.ego.config.tie_breaker = method
         return self
     }
     
-    method build() -> Ego {
+    method build() {
         return self.ego
     }
 }
 
-fun EGO() -> EgoBlock {
+fun EGO() {
     return EgoBlock {
         ego: create_ego()
     }

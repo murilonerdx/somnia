@@ -1,0 +1,45 @@
+/*
+ * Somnia Logging - Structured Logging
+ */
+
+import { serialize } from "somnia-json/lib/serialization"
+
+class Logger {
+    field service_name
+    field context
+    
+    method log(level, message, data) {
+        var entry = {
+            timestamp: native_time_ms(),
+            level: level,
+            service: self.service_name,
+            message: message,
+            context: self.context
+        }
+        
+        if (data != null) {
+            entry["data"] = data
+        }
+        
+        println(serialize(entry))
+    }
+    
+    method info(message, data) { self.log("INFO", message, data) }
+    method warn(message, data) { self.log("WARN", message, data) }
+    method error(message, data) { self.log("ERROR", message, data) }
+    method debug(message, data) { self.log("DEBUG", message, data) }
+    
+    method with_context(key, value) {
+        self.context[key] = value
+        return self
+    }
+}
+
+fun create_logger(name) {
+    return Logger { service_name: name, context: {} }
+}
+
+export {
+    Logger,
+    create_logger
+}

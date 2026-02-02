@@ -8,10 +8,10 @@
 # ============================================================================
 
 class ValidationResult {
-    field valid: bool
-    field errors: list
+    field valid
+    field errors
     
-    method is_valid() -> bool {
+    method is_valid() {
         return self.valid
     }
     
@@ -20,7 +20,7 @@ class ValidationResult {
         self.errors = self.errors + [{ "field": field, "message": message }]
     }
     
-    method merge(other: ValidationResult) -> ValidationResult {
+    method merge(other: ValidationResult) {
         return ValidationResult {
             valid: self.valid and other.valid,
             errors: self.errors + other.errors
@@ -28,11 +28,11 @@ class ValidationResult {
     }
 }
 
-fun valid() -> ValidationResult {
+fun valid() {
     return ValidationResult { valid: true, errors: [] }
 }
 
-fun invalid(field: string, message: string) -> ValidationResult {
+fun invalid(field: string, message: string) {
     return ValidationResult { 
         valid: false, 
         errors: [{ "field": field, "message": message }]
@@ -43,56 +43,56 @@ fun invalid(field: string, message: string) -> ValidationResult {
 # VALIDATORS
 # ============================================================================
 
-fun required(value: any, field: string) -> ValidationResult {
+fun required(value: any, field: string) {
     when value == null or value == "" => {
         return invalid(field, "is required")
     }
     return valid()
 }
 
-fun min_length(value: string, min: number, field: string) -> ValidationResult {
+fun min_length(value: string, min: number, field: string) {
     when len(value) < min => {
         return invalid(field, "must be at least " + native_to_string(min) + " characters")
     }
     return valid()
 }
 
-fun max_length(value: string, max: number, field: string) -> ValidationResult {
+fun max_length(value: string, max: number, field: string) {
     when len(value) > max => {
         return invalid(field, "must be at most " + native_to_string(max) + " characters")
     }
     return valid()
 }
 
-fun min_value(value: number, min: number, field: string) -> ValidationResult {
+fun min_value(value: number, min: number, field: string) {
     when value < min => {
         return invalid(field, "must be at least " + native_to_string(min))
     }
     return valid()
 }
 
-fun max_value(value: number, max: number, field: string) -> ValidationResult {
+fun max_value(value: number, max: number, field: string) {
     when value > max => {
         return invalid(field, "must be at most " + native_to_string(max))
     }
     return valid()
 }
 
-fun is_email(value: string, field: string) -> ValidationResult {
+fun is_email(value: string, field: string) {
     when not contains_char(value, "@") or not contains_char(value, ".") => {
         return invalid(field, "must be a valid email address")
     }
     return valid()
 }
 
-fun is_url(value: string, field: string) -> ValidationResult {
+fun is_url(value: string, field: string) {
     when not string_starts_with(value, "http://") and not string_starts_with(value, "https://") => {
         return invalid(field, "must be a valid URL")
     }
     return valid()
 }
 
-fun is_numeric(value: string, field: string) -> ValidationResult {
+fun is_numeric(value: string, field: string) {
     for i in range(0, len(value)) {
         var c = string_substring(value, i, i + 1)
         when not (c >= "0" and c <= "9") and c != "." and c != "-" => {
@@ -102,7 +102,7 @@ fun is_numeric(value: string, field: string) -> ValidationResult {
     return valid()
 }
 
-fun matches_pattern(value: string, pattern: string, field: string) -> ValidationResult {
+fun matches_pattern(value: string, pattern: string, field: string) {
     # Simple pattern matching (not full regex)
     when not native_matches(value, pattern) => {
         return invalid(field, "does not match required pattern")
@@ -110,14 +110,14 @@ fun matches_pattern(value: string, pattern: string, field: string) -> Validation
     return valid()
 }
 
-fun one_of(value: any, allowed: list, field: string) -> ValidationResult {
+fun one_of(value: any, allowed: list, field: string) {
     for item in allowed {
         when item == value => return valid()
     }
     return invalid(field, "must be one of: " + native_to_string(allowed))
 }
 
-fun contains_char(str: string, char: string) -> bool {
+fun contains_char(str: string, char: string) {
     for i in range(0, len(str)) {
         when string_substring(str, i, i + 1) == char => return true
     }
@@ -138,7 +138,7 @@ class SchemaField {
 class Schema {
     field fields: list
     
-    method field(name: string, type: string) -> SchemaBuilder {
+    method field(name: string, type: string) {
         return SchemaBuilder {
             schema: self,
             current_field: SchemaField {
@@ -150,7 +150,7 @@ class Schema {
         }
     }
     
-    method validate(data: map) -> ValidationResult {
+    method validate(data: map) {
         var result = valid()
         
         for field in self.fields {
@@ -186,56 +186,56 @@ class SchemaBuilder {
     field schema: Schema
     field current_field: SchemaField
     
-    method required() -> SchemaBuilder {
+    method required() {
         self.current_field.required = true
         return self
     }
     
-    method min(value: number) -> SchemaBuilder {
+    method min(value: number) {
         when self.current_field.type == "string" => {
             self.current_field.validators = self.current_field.validators + [
-                fun(v: any, f: string) -> ValidationResult { return min_length(v, value, f) }
+                fun(v: any, f: string) { return min_length(v, value, f) }
             ]
         }
         when self.current_field.type == "number" => {
             self.current_field.validators = self.current_field.validators + [
-                fun(v: any, f: string) -> ValidationResult { return min_value(v, value, f) }
+                fun(v: any, f: string) { return min_value(v, value, f) }
             ]
         }
         return self
     }
     
-    method max(value: number) -> SchemaBuilder {
+    method max(value: number) {
         when self.current_field.type == "string" => {
             self.current_field.validators = self.current_field.validators + [
-                fun(v: any, f: string) -> ValidationResult { return max_length(v, value, f) }
+                fun(v: any, f: string) { return max_length(v, value, f) }
             ]
         }
         when self.current_field.type == "number" => {
             self.current_field.validators = self.current_field.validators + [
-                fun(v: any, f: string) -> ValidationResult { return max_value(v, value, f) }
+                fun(v: any, f: string) { return max_value(v, value, f) }
             ]
         }
         return self
     }
     
-    method email() -> SchemaBuilder {
+    method email() {
         self.current_field.validators = self.current_field.validators + [is_email]
         return self
     }
     
-    method url() -> SchemaBuilder {
+    method url() {
         self.current_field.validators = self.current_field.validators + [is_url]
         return self
     }
     
-    method add() -> Schema {
+    method add() {
         self.schema.fields = self.schema.fields + [self.current_field]
         return self.schema
     }
 }
 
-fun schema() -> Schema {
+fun schema() {
     return Schema { fields: [] }
 }
 

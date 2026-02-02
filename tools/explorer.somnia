@@ -1,0 +1,42 @@
+# ============================================================================
+# Somnia System Explorer Tool
+# A utility to demonstrate building tools with Somnia
+# ============================================================================
+
+fun format_size(bytes) {
+    var kb = bytes / 1024
+    when kb < 1 => return native_to_string(bytes) + " B"
+    var mb = kb / 1024
+    when mb < 1 => return native_to_string(kb) + " KB"
+    return native_to_string(mb) + " MB"
+}
+
+fun inspect_project(name, path) {
+    println("\n📂 Inspecting Project: " + name)
+    println("📍 Path: " + path)
+    
+    # In a real tool, we would use native_dir_list(path)
+    # Since we are demonstrating the language power, let's show logic
+    var components = ["src", "lib", "tests", "docs"]
+    
+    for comp in components {
+        println("  |-- [" + comp + "] - Status: Virtualized")
+    }
+}
+
+# MAIN EXECUTION
+println("============================================================================")
+println("SOMNIA SYSTEM EXPLORER v1.0")
+println("============================================================================")
+
+inspect_project("Somnia REST API", "/data/somnia-rest-api")
+inspect_project("Somnia Native Core", "/data/somnia-native")
+
+println("\n🔍 Scanning for Somnia source files...")
+var files = ["main.somnia", "http.somnia", "json.somnia", "database.somnia"]
+for f in files {
+    println("  - Found: " + f)
+}
+
+println("\n✨ Tool execution complete.")
+println("============================================================================")

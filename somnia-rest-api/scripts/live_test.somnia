@@ -1,0 +1,49 @@
+# ============================================================================
+# Somnia API Tester
+# Demonstrating real HttpClient capabilities
+# ============================================================================
+
+import { HttpClient, HttpRequest } from "./somnia-http/lib/http"
+import { json_stringify, to_json } from "./somnia-json/lib/json"
+
+# Polyfills for standalone execution
+fun native_to_string(v) { return "" + v }
+
+println("🚀 Starting Somnia API Live Test...")
+
+var client = HttpClient {}
+var url = "http://localhost:8080/api/users"
+
+# 1. Test GET /api/users (Initial list)
+println("\n[1] Testing GET /api/users...")
+var res1 = client.get(url)
+println("Status: " + native_to_string(res1.status))
+println("Body: " + res1.body)
+
+# 2. Test POST /api/users (Create User)
+println("\n[2] Testing POST /api/users...")
+var user_data = {
+    "name": "Antigravity Test",
+    "email": "antigravity@somnia.io",
+    "password": "strong-password-123",
+    "role": "admin"
+}
+
+var req = HttpRequest {
+    method: "POST",
+    path: "/api/users",
+    body: json_stringify(to_json(user_data)),
+    headers: { "Content-Type": "application/json" }
+}
+
+var res2 = client.send(url, req)
+println("Status: " + native_to_string(res2.status))
+println("Body: " + res2.body)
+
+# 3. Test GET /api/users (Verification)
+println("\n[3] Testing GET /api/users (Verification)...")
+var res3 = client.get(url)
+println("Status: " + native_to_string(res3.status))
+println("Body: " + res3.body)
+
+println("\n✅ Somnia Live Test Complete!")

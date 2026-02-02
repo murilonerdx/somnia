@@ -3,17 +3,17 @@
 # In-memory database simulation
 # ============================================================================
 
-import { uuid } from "../../somnia-stdlib/lib/utils"
-import { filter_list, find_in_list, map_list } from "../../somnia-stdlib/lib/collections"
+import { uuid } from "./somnia-stdlib/lib/utils"
+import { filter_list, find_in_list, map_list } from "./somnia-stdlib/lib/collections"
 
 # ============================================================================
 # DATABASE
 # ============================================================================
 
 class Database {
-    field collections: map
+    field collections
     
-    method collection(name: string) -> Collection {
+    method collection(name) {
         when not (name in self.collections) => {
             self.collections[name] = Collection {
                 name: name,
@@ -31,7 +31,7 @@ class Collection {
     field indexes: map
     
     # Insert a document
-    method insert(doc: map) -> map {
+    method insert(doc: map) {
         when not ("id" in doc) => {
             doc["id"] = uuid()
         }
@@ -45,12 +45,12 @@ class Collection {
     }
     
     # Find all documents
-    method find_all() -> list {
+    method find_all() {
         return self.documents
     }
     
     # Find by ID
-    method find_by_id(id: string) -> map {
+    method find_by_id(id: string) {
         for doc in self.documents {
             when doc["id"] == id => return doc
         }
@@ -58,8 +58,8 @@ class Collection {
     }
     
     # Find with filter
-    method find(query: map) -> list {
-        return filter_list(self.documents, fun(doc: map) -> bool {
+    method find(query: map) {
+        return filter_list(self.documents, fun(doc: map) {
             for key in native_keys(query) {
                 when not (key in doc) => return false
                 when doc[key] != query[key] => return false
@@ -69,14 +69,14 @@ class Collection {
     }
     
     # Find one
-    method find_one(query: map) -> map {
+    method find_one(query: map) {
         var results = self.find(query)
         when len(results) > 0 => return results[0]
         return null
     }
     
     # Update by ID
-    method update_by_id(id: string, updates: map) -> map {
+    method update_by_id(id: string, updates: map) {
         for i in range(0, len(self.documents)) {
             when self.documents[i]["id"] == id => {
                 for key in native_keys(updates) {
@@ -90,7 +90,7 @@ class Collection {
     }
     
     # Delete by ID
-    method delete_by_id(id: string) -> bool {
+    method delete_by_id(id: string) {
         var new_docs = []
         var found = false
         
@@ -108,7 +108,7 @@ class Collection {
     }
     
     # Count documents
-    method count() -> number {
+    method count() {
         return len(self.documents)
     }
     
@@ -136,7 +136,7 @@ class Collection {
 # Global database instance
 var db = Database { collections: {} }
 
-fun get_db() -> Database {
+fun get_db() {
     return db
 }
 

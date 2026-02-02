@@ -182,9 +182,21 @@ static TokenType identifier_type(Lexer* lexer) {
     const char* start = &lexer->source[lexer->start];
     
     // Check keywords
+    // Check keywords
     switch (start[0]) {
-        case 'a': return check_keyword(start + 1, len - 1, "nd", TOKEN_AND);
-        case 'b': return check_keyword(start + 1, len - 1, "reak", TOKEN_BREAK);
+        case 'a': 
+            if (len > 1) {
+                if (start[1] == 'n') return check_keyword(start + 2, len - 2, "d", TOKEN_AND);
+                if (start[1] == 'c') return check_keyword(start + 2, len - 2, "t", TOKEN_ACT);
+                if (start[1] == 'f') return check_keyword(start + 2, len - 2, "fect", TOKEN_AFFECT);
+            }
+            break;
+        case 'b': 
+            if (len > 1) {
+                if (start[1] == 'r') return check_keyword(start + 2, len - 2, "eak", TOKEN_BREAK);
+                if (start[1] == 'u') return check_keyword(start + 2, len - 2, "dget", TOKEN_BUDGET);
+            }
+            break;
         case 'c':
             if (len > 1) {
                 switch (start[1]) {
@@ -199,21 +211,38 @@ static TokenType identifier_type(Lexer* lexer) {
                 }
             }
             break;
-        case 'd': return check_keyword(start + 1, len - 1, "efault", TOKEN_DEFAULT);
+        case 'd': 
+            if (len > 1) {
+                if (start[1] == 'e') return check_keyword(start + 2, len - 2, "fault", TOKEN_DEFAULT);
+                if (start[1] == 'r') return check_keyword(start + 2, len - 2, "ive", TOKEN_DRIVE);
+            }
+            break;
         case 'e':
             if (len > 1) {
                 switch (start[1]) {
                     case 'l': return check_keyword(start + 2, len - 2, "se", TOKEN_ELSE);
                     case 'x': return check_keyword(start + 2, len - 2, "port", TOKEN_EXPORT);
+                    case 'g': return check_keyword(start + 2, len - 2, "o", TOKEN_EGO);
                 }
             }
+            break;
+        case 'E':
+            if (len > 1 && start[1] == 'G') return check_keyword(start + 2, len - 2, "O", TOKEN_EGO);
             break;
         case 'f':
             if (len > 1) {
                 switch (start[1]) {
-                    case 'a': return check_keyword(start + 2, len - 2, "lse", TOKEN_FALSE);
+                    case 'a': 
+                        if (len > 2 && start[2] == 'l') return check_keyword(start + 3, len - 3, "se", TOKEN_FALSE);
+                        if (len > 2 && start[2] == 'c') return check_keyword(start + 3, len - 3, "t", TOKEN_FACT);
+                        break;
                     case 'u': return check_keyword(start + 2, len - 2, "n", TOKEN_FUN);
-                    case 'o': return check_keyword(start + 2, len - 2, "r", TOKEN_FOR);
+                    case 'o': 
+                        if (len > 2 && start[2] == 'r') {
+                            if (len == 3) return TOKEN_FOR;
+                            return check_keyword(start + 3, len - 3, "bid", TOKEN_FORBID);
+                        }
+                        break;
                     case 'r': return check_keyword(start + 2, len - 2, "om", TOKEN_FROM);
                     case 'i': return check_keyword(start + 2, len - 2, "eld", TOKEN_FIELD);
                 }
@@ -223,12 +252,21 @@ static TokenType identifier_type(Lexer* lexer) {
             if (len > 1) {
                 switch (start[1]) {
                     case 'f': return len == 2 ? TOKEN_IF : TOKEN_IDENTIFIER;
-                    case 'n': return len == 2 ? TOKEN_IN : TOKEN_IDENTIFIER;
+                    case 'n': 
+                        if (len == 2) return TOKEN_IN;
+                        return check_keyword(start + 2, len - 2, "tent", TOKEN_INTENT);
                     case 'm': return check_keyword(start + 2, len - 2, "port", TOKEN_IMPORT);
+                    case 'd': return len == 2 ? TOKEN_ID : TOKEN_IDENTIFIER;
                 }
             }
             break;
-        case 'm': return TOKEN_IDENTIFIER; // method is now just an identifier
+        case 'I':
+            if (len > 1 && start[1] == 'D') return len == 2 ? TOKEN_ID : TOKEN_IDENTIFIER;
+            break;
+        case 'A':
+            if (len > 1 && start[1] == 'C') return check_keyword(start + 2, len - 2, "T", TOKEN_ACT);
+            break;
+        case 'm': return check_keyword(start + 1, len - 1, "ethod", TOKEN_METHOD); 
         case 'n':
             if (len > 1) {
                 switch (start[1]) {
@@ -238,9 +276,31 @@ static TokenType identifier_type(Lexer* lexer) {
                 }
             }
             break;
-        case 'o': return check_keyword(start + 1, len - 1, "r", TOKEN_OR);
-        case 'r': return check_keyword(start + 1, len - 1, "eturn", TOKEN_RETURN);
-        case 't': return check_keyword(start + 1, len - 1, "rue", TOKEN_TRUE);
+        case 'o': 
+            if (len > 1) {
+                if (start[1] == 'r') return len == 2 ? TOKEN_OR : TOKEN_IDENTIFIER;
+                if (start[1] == 'n') {
+                    if (len > 3 && start[2] == '_') return check_keyword(start + 3, len - 3, "tie", TOKEN_ON_TIE);
+                }
+            }
+            break;
+        case 'p': return check_keyword(start + 1, len - 1, "ropose", TOKEN_PROPOSE);
+        case 'r': 
+            if (len > 1) {
+                if (start[1] == 'e') return check_keyword(start + 2, len - 2, "turn", TOKEN_RETURN);
+                if (start[1] == 'u') return check_keyword(start + 2, len - 2, "le_order", TOKEN_RULE_ORDER);
+            }
+            break;
+        case 's': return check_keyword(start + 1, len - 1, "elect", TOKEN_SELECT);
+        case 't':
+            if (len > 1) {
+                if (start[1] == 'r') {
+                    if (len > 2 && start[2] == 'y') return TOKEN_TRY;
+                    return check_keyword(start + 2, len - 2, "ue", TOKEN_TRUE);
+                }
+                if (start[1] == 'o') return check_keyword(start + 2, len - 2, "p", TOKEN_TOP);
+            }
+            break;
         case 'v': return check_keyword(start + 1, len - 1, "ar", TOKEN_VAR);
         case 'w':
             if (len > 2 && start[1] == 'h') {

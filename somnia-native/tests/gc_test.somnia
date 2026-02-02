@@ -1,0 +1,24 @@
+fun leak_memory() {
+    var m = {}
+    var arr = []
+    # Create garbage
+    for (i in range(0, 100)) {
+        push(arr, i)
+        m[native_to_string(i)] = "value " + native_to_string(i)
+    }
+    # Return nothing, m and arr become garbage
+}
+
+println("Starting GC Test...")
+println("Allocating garbage loop...")
+
+for (k in range(0, 50)) {
+    leak_memory()
+    if (k % 10 == 0) {
+        println("Iteration: " + native_to_string(k))
+        # Trigger GC manually regarding our hardening plan
+        gc() 
+        println("GC Done")
+    }
+}
+println("Finished GC Test without OOM/Crash")

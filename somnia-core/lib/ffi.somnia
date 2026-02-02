@@ -25,7 +25,7 @@ class FFIAction {
     field capabilities: list        # Required capabilities (e.g., ["db", "http"])
 }
 
-fun create_ffi_action(name: string) -> FFIAction {
+fun create_ffi_action(name: string) {
     var parts = name.split(".")
     var module = if len(parts) > 1 then parts[0] else ""
     var method = if len(parts) > 1 then parts[1] else name
@@ -47,15 +47,15 @@ fun create_ffi_action(name: string) -> FFIAction {
 # ============================================================================
 
 class FFIRegistry {
-    field actions: map              # name -> FFIAction
-    field handlers: map             # name -> native handler reference
+    field actions: map              # name
+    field handlers: map             # name handler reference
     
     method register(action: FFIAction, handler: any) {
         self.actions[action.name] = action
         self.handlers[action.name] = handler
     }
     
-    method call(name: string, args: map) -> ActionResult {
+    method call(name: string, args: map) {
         when not (name in self.actions) {
             return result_error("FFI action not found: " + name, 0)
         }
@@ -73,17 +73,17 @@ class FFIRegistry {
         return convert_from_ffi(ffi_result)
     }
     
-    method list() -> list {
+    method list() {
         return native_keys(self.actions)
     }
     
-    method get(name: string) -> FFIAction {
+    method get(name: string) {
         when name in self.actions => return self.actions[name]
         return null
     }
 }
 
-fun create_ffi_registry() -> FFIRegistry {
+fun create_ffi_registry() {
     return FFIRegistry {
         actions: {},
         handlers: {}
@@ -94,7 +94,7 @@ fun create_ffi_registry() -> FFIRegistry {
 # TYPE CONVERSION
 # ============================================================================
 
-fun convert_to_ffi(value: Value) -> any {
+fun convert_to_ffi(value: Value) {
     when value.type == "null" => return null
     when value.type == "bool" => return value.data
     when value.type == "number" => return value.data
@@ -116,7 +116,7 @@ fun convert_to_ffi(value: Value) -> any {
     return value.data
 }
 
-fun convert_from_ffi(ffi_result: any) -> ActionResult {
+fun convert_from_ffi(ffi_result: any) {
     when ffi_result == null {
         return result_success(value_null(), 0)
     }
@@ -129,7 +129,7 @@ fun convert_from_ffi(ffi_result: any) -> ActionResult {
     return result_success(value, 0)
 }
 
-fun wrap_ffi_value(data: any) -> Value {
+fun wrap_ffi_value(data: any) {
     var t = native_type(data)
     
     when t == "null" => return value_null()
@@ -161,37 +161,37 @@ fun wrap_ffi_value(data: any) -> Value {
 class FFIActionBuilder {
     field action: FFIAction
     
-    method input(name: string, type: string) -> FFIActionBuilder {
+    method input(name: string, type: string) {
         self.action.input_schema[name] = type
         return self
     }
     
-    method output(type: string) -> FFIActionBuilder {
+    method output(type: string) {
         self.action.output_schema["type"] = type
         return self
     }
     
-    method timeout(ms: number) -> FFIActionBuilder {
+    method timeout(ms: number) {
         self.action.timeout_ms = ms
         return self
     }
     
-    method retries(n: number) -> FFIActionBuilder {
+    method retries(n: number) {
         self.action.retries = n
         return self
     }
     
-    method requires(capability: string) -> FFIActionBuilder {
+    method requires(capability: string) {
         self.action.capabilities = self.action.capabilities + [capability]
         return self
     }
     
-    method build() -> FFIAction {
+    method build() {
         return self.action
     }
 }
 
-fun ffi_action(name: string) -> FFIActionBuilder {
+fun ffi_action(name: string) {
     return FFIActionBuilder {
         action: create_ffi_action(name)
     }
@@ -209,7 +209,7 @@ class PluginManifest {
     field requires: list            # Required dependencies
 }
 
-fun parse_plugin_manifest(json: string) -> PluginManifest {
+fun parse_plugin_manifest(json: string) {
     var data = native_parse_json(json)
     
     return PluginManifest {
@@ -227,7 +227,7 @@ fun parse_plugin_manifest(json: string) -> PluginManifest {
 
 class PluginLoader {
     field registry: FFIRegistry
-    field plugins: map              # name -> PluginManifest
+    field plugins: map              # name
     field capabilities: list        # All available capabilities
     
     method load(manifest: PluginManifest, handlers: map) {
@@ -251,16 +251,16 @@ class PluginLoader {
         native_log("INFO", "[PLUGIN] Loaded " + manifest.name + " v" + manifest.version)
     }
     
-    method has_capability(cap: string) -> bool {
+    method has_capability(cap: string) {
         return cap in self.capabilities
     }
     
-    method get_actions() -> list {
+    method get_actions() {
         return self.registry.list()
     }
 }
 
-fun create_plugin_loader() -> PluginLoader {
+fun create_plugin_loader() {
     return PluginLoader {
         registry: create_ffi_registry(),
         plugins: {},

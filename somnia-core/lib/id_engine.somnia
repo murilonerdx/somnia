@@ -41,7 +41,7 @@ class IdEngine {
         self.default_affects[name] = valence
     }
     
-    method evaluate(ctx: ExecutionContext) -> ProposalList {
+    method evaluate(ctx: ExecutionContext) {
         # Apply default drives if not set
         for name in native_keys(self.default_drives) {
             when ctx.get_drive(name) == null {
@@ -85,12 +85,12 @@ class IdEngine {
         return proposals
     }
     
-    method rule_count() -> number {
+    method rule_count() {
         return len(self.rules)
     }
 }
 
-fun create_id_engine() -> IdEngine {
+fun create_id_engine() {
     return IdEngine {
         rules: [],
         rule_index: {},
@@ -106,32 +106,32 @@ fun create_id_engine() -> IdEngine {
 class IdBlock {
     field engine: IdEngine
     
-    method drive(name: string, intensity: number) -> IdBlock {
+    method drive(name: string, intensity: number) {
         self.engine.set_default_drive(name, intensity)
         return self
     }
     
-    method affect(name: string, valence: number) -> IdBlock {
+    method affect(name: string, valence: number) {
         self.engine.set_default_affect(name, valence)
     }
     
-    method rule(id: string) -> RuleBuilder {
+    method rule(id: string) {
         var builder = rule(id)
         # Store reference so build() can add to engine
         return builder
     }
     
-    method add(r: Rule) -> IdBlock {
+    method add(r: Rule) {
         self.engine.add_rule(r)
         return self
     }
     
-    method build() -> IdEngine {
+    method build() {
         return self.engine
     }
 }
 
-fun ID() -> IdBlock {
+fun ID() {
     return IdBlock {
         engine: create_id_engine()
     }

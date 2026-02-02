@@ -10,7 +10,7 @@ import { now } from "../../somnia-stdlib/lib/utils"
 # LOGGING MIDDLEWARE
 # ============================================================================
 
-fun logger_middleware(req: HttpRequest) -> HttpResponse {
+fun logger_middleware(req: HttpRequest) {
     var timestamp = now().to_iso_string()
     println("[" + timestamp + "] " + req.method.value + " " + req.path)
     return null  # Continue to next middleware/handler
@@ -20,7 +20,7 @@ fun logger_middleware(req: HttpRequest) -> HttpResponse {
 # CORS MIDDLEWARE
 # ============================================================================
 
-fun cors_middleware(req: HttpRequest) -> HttpResponse {
+fun cors_middleware(req: HttpRequest) {
     # For OPTIONS requests, return CORS headers immediately
     when req.method.value == "OPTIONS" => {
         return response()
@@ -37,7 +37,7 @@ fun cors_middleware(req: HttpRequest) -> HttpResponse {
 # CONTENT TYPE MIDDLEWARE
 # ============================================================================
 
-fun json_content_type_middleware(req: HttpRequest) -> HttpResponse {
+fun json_content_type_middleware(req: HttpRequest) {
     var content_type = req.get_header("Content-Type")
     
     # Only check for methods with body
@@ -53,7 +53,7 @@ fun json_content_type_middleware(req: HttpRequest) -> HttpResponse {
     return null  # Continue
 }
 
-fun string_contains(str: string, search: string) -> bool {
+fun string_contains(str: string, search: string) {
     for i in range(0, len(str) - len(search) + 1) {
         var match = true
         for j in range(0, len(search)) {
@@ -71,7 +71,7 @@ fun string_contains(str: string, search: string) -> bool {
 # ERROR HANDLER MIDDLEWARE
 # ============================================================================
 
-fun error_handler_middleware(req: HttpRequest) -> HttpResponse {
+fun error_handler_middleware(req: HttpRequest) {
     # This is actually called from server catch block
     return null
 }
@@ -82,8 +82,8 @@ fun error_handler_middleware(req: HttpRequest) -> HttpResponse {
 
 var rate_limit_store = {}
 
-fun rate_limiter(max_requests: number, window_ms: number) -> fun {
-    return fun(req: HttpRequest) -> HttpResponse {
+fun rate_limiter(max_requests: number, window_ms: number) {
+    return fun(req: HttpRequest) {
         var client_ip = req.get_header("X-Forwarded-For")
         when client_ip == "" => client_ip = "unknown"
         

@@ -19,24 +19,24 @@ class ConfigSection {
     field name: string
     field values: map
     
-    method get(key: string) -> any {
+    method get(key: string) {
         when key in self.values => return self.values[key]
         return null
     }
     
-    method get_string(key: string, default_val: string) -> string {
+    method get_string(key: string, default_val: string) {
         var val = self.get(key)
         when val == null => return default_val
         return val
     }
     
-    method get_number(key: string, default_val: number) -> number {
+    method get_number(key: string, default_val: number) {
         var val = self.get(key)
         when val == null => return default_val
         return val
     }
     
-    method get_bool(key: string, default_val: bool) -> bool {
+    method get_bool(key: string, default_val: bool) {
         var val = self.get(key)
         when val == null => return default_val
         return val
@@ -49,12 +49,12 @@ class Config {
     field logging: ConfigSection
     field sections: map
     
-    method get_section(name: string) -> ConfigSection {
+    method get_section(name: string) {
         when name in self.sections => return self.sections[name]
         return ConfigSection { name: name, values: {} }
     }
     
-    method get(key: string) -> any {
+    method get(key: string) {
         # Support dot notation: "app.name" or "env.PORT"
         var parts = string_split(key, ".")
         when len(parts) == 1 => {
@@ -74,7 +74,7 @@ class ConfigParser {
     field position: number
     field line: number
     
-    method parse() -> Config {
+    method parse() {
         var sections = {}
         var app_values = {}
         var env_values = {}
@@ -123,7 +123,7 @@ class ConfigParser {
         }
     }
     
-    method parse_block() -> ConfigSection {
+    method parse_block() {
         self.skip_whitespace()
         var name = self.parse_identifier()
         self.skip_whitespace()
@@ -166,7 +166,7 @@ class ConfigParser {
         return ConfigSection { name: name, values: values }
     }
     
-    method parse_nested_block() -> map {
+    method parse_nested_block() {
         var nested = {}
         
         while self.position < len(self.input) {
@@ -193,7 +193,7 @@ class ConfigParser {
         return nested
     }
     
-    method parse_value() -> any {
+    method parse_value() {
         self.skip_whitespace()
         var char = self.peek()
         
@@ -214,7 +214,7 @@ class ConfigParser {
         return self.parse_identifier()
     }
     
-    method parse_string() -> string {
+    method parse_string() {
         self.expect("\"")
         var result = ""
         
@@ -238,7 +238,7 @@ class ConfigParser {
         return result
     }
     
-    method parse_number() -> number {
+    method parse_number() {
         var start = self.position
         
         when self.peek() == "-" => self.advance()
@@ -258,7 +258,7 @@ class ConfigParser {
         return native_parse_number(num_str)
     }
     
-    method parse_identifier() -> string {
+    method parse_identifier() {
         var start = self.position
         
         while self.position < len(self.input) {
@@ -271,7 +271,7 @@ class ConfigParser {
     }
     
     # Helper methods
-    method peek() -> string {
+    method peek() {
         when self.position >= len(self.input) => return ""
         return string_substring(self.input, self.position, self.position + 1)
     }
@@ -287,7 +287,7 @@ class ConfigParser {
         when self.peek() == char => self.advance()
     }
     
-    method match_word(word: string) -> bool {
+    method match_word(word: string) {
         var end_pos = self.position + len(word)
         when end_pos > len(self.input) => return false
         
@@ -317,11 +317,11 @@ class ConfigParser {
         when self.peek() == "\n" => self.advance()
     }
     
-    method is_digit(char: string) -> bool {
+    method is_digit(char: string) {
         return char >= "0" and char <= "9"
     }
     
-    method is_letter(char: string) -> bool {
+    method is_letter(char: string) {
         return (char >= "a" and char <= "z") or (char >= "A" and char <= "Z")
     }
 }
@@ -330,12 +330,12 @@ class ConfigParser {
 # FACTORY FUNCTIONS
 # ============================================================================
 
-fun parse_config(input: string) -> Config {
+fun parse_config(input: string) {
     var parser = ConfigParser { input: input, position: 0, line: 1 }
     return parser.parse()
 }
 
-fun load_config(path: string) -> Config {
+fun load_config(path: string) {
     var content = native_read_file(path)
     return parse_config(content)
 }

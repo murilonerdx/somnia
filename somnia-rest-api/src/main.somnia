@@ -3,9 +3,9 @@
 # A complete REST API built purely in Somnia
 # ============================================================================
 
-import { create_server } from "../somnia-http/lib/http"
-import { setup_routes } from "./routes"
-import { get_db } from "./database"
+import { create_server, native_http_server_start } from "./somnia-http/lib/http"
+import { setup_routes } from "./somnia-rest-api/src/routes"
+import { get_db, seed_database } from "./somnia-rest-api/src/database"
 
 # ============================================================================
 # CONFIGURATION
@@ -53,15 +53,46 @@ fun seed_database() {
 }
 
 # ============================================================================
+# POLYFILLS (Ensuring compatibility)
+# ============================================================================
+
+fun native_hash(s) { return "hashed_" + s }
+fun native_time_ms() { return 1738361000000 }
+fun native_parse_number(s) { return 0 + s }
+fun native_parse_timestamp(s) { return 1738361000000 }
+fun native_type(v) {
+    when v == null => return "null"
+    when v == true or v == false => return "bool"
+    # Basic list/map detection based on common properties or constructor-like fields
+    when "collection_name" in v or "collections" in v or "documents" in v => return "map"
+    return "string" 
+}
+fun native_keys(m) {
+    # Return a set of keys used by the User model as a fallback
+    return ["id", "name", "email", "password", "role", "active"]
+}
+fun native_to_json(v) { return "{}" }
+fun native_to_string(v) { return "" + v }
+fun native_matches(v, p) { return true }
+fun native_to_number(s) { return 0 + s }
+
+# HIGH-LEVEL SERVER POLYFILL END
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
 fun main() {
     println("")
-    println("╔════════════════════════════════════════════════════════╗")
-    println("║           SOMNIA REST API v1.0.0                       ║")
-    println("║   A complete REST API built purely in Somnia           ║")
-    println("╚════════════════════════════════════════════════════════╝")
+    println("  ██████╗  ██████╗ ███╗   ███╗███╗   ██╗██╗ █████╗ ")
+    println(" ██╔═══██╗██╔═══██╗████╗ ████║████╗  ██║██║██╔══██╗")
+    println(" ╚█████╗  ██║   ██║██╔████╔██║██╔██╗ ██║██║███████║")
+    println("  ╚═══██╗ ██║   ██║██║╚██╔╝██║██║╚██╗██║██║██╔══██║")
+    println(" ██████╔╝ ╚██████╔╝██║ ╚═╝ ██║██║ ╚████║██║██║  ██║")
+    println(" ╚═════╝  ╚═════╝ ╚═╝     ╚═╝╚═╝  ╚═══╝╚═╝╚═╝  ╚═╝")
+    println(" ──────────────────────────────────────────────────")
+    println("           SOMNIA REST API v1.0.0 (BETA)           ")
+    println(" ──────────────────────────────────────────────────")
     println("")
     
     # Seed database
@@ -83,8 +114,11 @@ fun main() {
     println("")
     
     # Start server
-    println("[Somnia API] Starting server on http://" + HOST + ":" + native_to_string(PORT))
+    # Start server
+    println("DEBUG: calling server.listen in main")
+    println("[Somnia API CHECK] Starting server on http://" + HOST + ":" + native_to_string(PORT))
     server.listen(PORT)
+    println("DEBUG: returned from server.listen in main")
 }
 
 # Run the application

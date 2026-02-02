@@ -3,27 +3,27 @@
 # HTTP handlers for user endpoints
 # ============================================================================
 
-import { HttpRequest, HttpResponse, json_response, error_response } from "../../somnia-http/lib/http"
-import { get_db } from "../database"
-import { User, user_from_map, user_create_schema, user_update_schema } from "../models/user"
-import { uuid } from "../../somnia-stdlib/lib/utils"
-import { map_list } from "../../somnia-stdlib/lib/collections"
-import { json_parse } from "../../somnia-json/lib/json"
+import { HttpRequest, HttpResponse, json_response, error_response } from "./somnia-http/lib/http"
+import { get_db } from "./somnia-rest-api/src/database"
+import { User, user_from_map, user_create_schema, user_update_schema } from "./somnia-rest-api/src/models/user"
+import { uuid } from "./somnia-stdlib/lib/utils"
+import { map_list } from "./somnia-stdlib/lib/collections"
+import { json_parse, from_json } from "./somnia-json/lib/json"
 
 # ============================================================================
 # USER CONTROLLER
 # ============================================================================
 
 class UserController {
-    field collection_name: string = "users"
+    field collection_name = "users"
     
     # GET /api/users - List all users
-    method list(req: HttpRequest) -> HttpResponse {
+    method list(req) {
         var db = get_db()
         var users_col = db.collection(self.collection_name)
         var users = users_col.find_all()
         
-        var safe_users = map_list(users, fun(u: map) -> map {
+        var safe_users = map_list(users, fun(u: map) {
             return {
                 "id": u["id"],
                 "name": u["name"],
@@ -41,7 +41,7 @@ class UserController {
     }
     
     # GET /api/users/:id - Get user by ID
-    method get_by_id(req: HttpRequest) -> HttpResponse {
+    method get_by_id(req: HttpRequest) {
         var id = req.get_path_param("id")
         
         var db = get_db()
@@ -65,9 +65,14 @@ class UserController {
     }
     
     # POST /api/users - Create user
-    method create(req: HttpRequest) -> HttpResponse {
+    method create(req: HttpRequest) {
+        # Parse JSON
         var body = json_parse(req.body)
-        var data = native_from_json_value(body)
+        var data = from_json(body)
+        
+        when data == null => {
+            return error_response(400, "Invalid JSON body")
+        }
         
         # Validate
         var validation = user_create_schema().validate(data)
@@ -117,10 +122,10 @@ class UserController {
     }
     
     # PUT /api/users/:id - Update user
-    method update(req: HttpRequest) -> HttpResponse {
+    method update(req: HttpRequest) {
         var id = req.get_path_param("id")
         var body = json_parse(req.body)
-        var data = native_from_json_value(body)
+        var data = from_json(body)
         
         var db = get_db()
         var users_col = db.collection(self.collection_name)
@@ -163,7 +168,7 @@ class UserController {
     }
     
     # DELETE /api/users/:id - Delete user
-    method delete(req: HttpRequest) -> HttpResponse {
+    method delete(req: HttpRequest) {
         var id = req.get_path_param("id")
         
         var db = get_db()
@@ -185,7 +190,7 @@ class UserController {
 # Singleton instance
 var user_controller = UserController {}
 
-fun get_user_controller() -> UserController {
+fun get_user_controller() {
     return user_controller
 }
 

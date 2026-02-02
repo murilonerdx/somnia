@@ -62,6 +62,25 @@ typedef enum {
     TOKEN_NEW,
     TOKEN_IMPORT,
     TOKEN_EXPORT,
+    TOKEN_TRY,
+    TOKEN_CATCH,
+    TOKEN_ANY,
+    
+    // Agentic/Cognitive Keywords
+    TOKEN_ID,
+    TOKEN_EGO,
+    TOKEN_ACT,
+    TOKEN_DRIVE,
+    TOKEN_AFFECT,
+    TOKEN_INTENT,
+    TOKEN_FACT,
+    TOKEN_PROPOSE,
+    TOKEN_FORBID,
+    TOKEN_BUDGET,
+    TOKEN_SELECT,
+    TOKEN_ON_TIE,
+    TOKEN_RULE_ORDER,
+    TOKEN_TOP,
     
     // Operators
     TOKEN_PLUS,
@@ -128,13 +147,34 @@ struct Map;
 struct Function;
 struct Object;
 
+/* ============================================================================
+ * OBJECT HEADER (GC)
+ * ============================================================================ */
+
+typedef enum {
+    OBJ_ARRAY,
+    OBJ_MAP,
+    OBJ_FUNCTION,
+    OBJ_OBJECT,
+    OBJ_STRING
+} ObjType;
+
+typedef struct Obj {
+    ObjType type;
+    bool marked;
+    struct Obj* next;
+} Obj;
+
+/* Global object list head */
+extern Obj* vm_objects;
+
 /* Value structure - defined first */
 typedef struct Value {
     ValueType type;
     union {
         bool boolean;
         double number;
-        char* string;
+        char* string; // Not tracking strings yet (simple)
         struct Array* array;
         struct Map* map;
         struct Function* function;
@@ -148,6 +188,7 @@ typedef Value (*NativeFn)(Value* args, int arg_count, struct Env* env);
 
 /* Array structure */
 typedef struct Array {
+    Obj obj;            // GC Header
     Value* items;
     int count;
     int capacity;
@@ -155,6 +196,7 @@ typedef struct Array {
 
 /* Object structure */
 typedef struct Object {
+    Obj obj;            // GC Header
     char* class_name;
     struct Env* fields;
     struct ASTNode* ast;
@@ -168,6 +210,7 @@ typedef struct MapEntry {
 
 /* Map structure */
 typedef struct Map {
+    Obj obj;            // GC Header
     MapEntry* entries;
     int count;
     int capacity;
@@ -175,6 +218,7 @@ typedef struct Map {
 
 /* Function structure */
 typedef struct Function {
+    Obj obj;            // GC Header
     char* name;
     char** params;
     int param_count;
@@ -226,7 +270,18 @@ typedef enum {
     AST_LITERAL,
     AST_ARRAY,
     AST_MAP,
-    AST_OBJECT
+    AST_OBJECT,
+    
+    // Agentic Nodes
+    AST_ID_BLOCK,
+    AST_EGO_BLOCK,
+    AST_ACT_BLOCK,
+    AST_DRIVE_DECL,
+    AST_AFFECT_DECL,
+    AST_PROPOSE,
+    AST_FORBID,
+    AST_BUDGET,
+    AST_SELECT_CONFIG
 } ASTNodeType;
 
 /* AST Node */
@@ -385,6 +440,29 @@ typedef struct ASTNode {
             int count;
         } obj_inst;
         
+        // Agentic Blocks
+        struct {
+            struct ASTNode** statements;
+            int count;
+        } agentic_block;
+        
+        // Drive/Affect
+        struct {
+            char* name;
+            struct ASTNode* value;
+        } cognitive_decl;
+        
+        // Propose/Forbid
+        struct {
+            struct ASTNode* action;
+            struct ASTNode* condition;
+        } rule;
+        
+        // Budget
+        struct {
+            struct ASTNode* limit;
+        } budget_stmt;
+        
     } as;
 } ASTNode;
 
@@ -433,6 +511,9 @@ typedef struct {
  * INTERPRETER
  * ============================================================================ */
 
+#define MAX_RECURSION_DEPTH 500
+#define MAX_TEMP_STACK 1024
+
 typedef struct {
     Env* global_env;
     Env* current_env;
@@ -441,6 +522,14 @@ typedef struct {
     bool breaking;
     bool continuing;
     Value return_value;
+    int recur_depth;       // Recursion guard
+    
+    // Cognitive State
+    Env* cognitive_state;
+    
+    // GC Roots (Shadow Stack)
+    Value temp_stack[MAX_TEMP_STACK];
+    int temp_count;
 } Interpreter;
 
 /* ============================================================================
@@ -483,7 +572,10 @@ bool value_is_truthy(Value val);
 bool value_equals(Value a, Value b);
 Value value_copy(Value val);
 Value value_object(const char* class_name, Env* fields);
+Value value_function(void);
 void value_free(Value* val);
+void free_objects(void);
+void gc_collect(Env* env);
 
 /* Array operations */
 void array_push(Array* arr, Value val);
@@ -504,6 +596,11 @@ Value native_net_accept(Value* args, int arg_count, Env* env);
 Value native_net_read(Value* args, int arg_count, Env* env);
 Value native_net_write(Value* args, int arg_count, Env* env);
 Value native_net_close(Value* args, int arg_count, Env* env);
+
+/* SQL Primitives */
+Value native_sql_connect(Value* args, int arg_count, Env* env);
+Value native_sql_query(Value* args, int arg_count, Env* env);
+Value native_sql_exec(Value* args, int arg_count, Env* env);
 
 /* Utilities */
 char* read_file(const char* path);

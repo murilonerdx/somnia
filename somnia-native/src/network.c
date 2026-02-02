@@ -99,9 +99,6 @@ Value native_net_write(Value* args, int arg_count, Env* env) {
     int client_fd = (int)args[0].as.number;
     const char* data = args[1].as.string;
     
-    printf("[DEBUG] Sending %zu bytes. Prefix: '%.20s...'\n", strlen(data), data);
-    fflush(stdout);
-    
     ssize_t sent = send(client_fd, data, strlen(data), 0);
     return value_bool(sent >= 0);
 }

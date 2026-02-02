@@ -57,12 +57,12 @@ var counters = { "product": 0, "cart": 0, "order": 0 }
 # HELPERS
 # ============================================================================
 
-fun gen_id(type: string) -> string {
+fun gen_id(type: string) {
     counters[type] = counters[type] + 1
     return type + "_" + to_string(counters[type])
 }
 
-fun product_to_json(p: Product) -> map {
+fun product_to_json(p: Product) {
     return {
         "id": p.id,
         "name": p.name,
@@ -75,7 +75,7 @@ fun product_to_json(p: Product) -> map {
     }
 }
 
-fun cart_to_json(cart: Cart) -> map {
+fun cart_to_json(cart: Cart) {
     var items_json = []
     var total = 0
     
@@ -102,7 +102,7 @@ fun cart_to_json(cart: Cart) -> map {
     }
 }
 
-fun order_to_json(order: Order) -> map {
+fun order_to_json(order: Order) {
     return {
         "id": order.id,
         "user_id": order.user_id,
@@ -117,7 +117,7 @@ fun order_to_json(order: Order) -> map {
     }
 }
 
-fun get_or_create_cart(user_id: string) -> Cart {
+fun get_or_create_cart(user_id: string) {
     when user_id in carts {
         return carts[user_id]
     }
@@ -133,11 +133,11 @@ fun get_or_create_cart(user_id: string) -> Cart {
     return cart
 }
 
-fun calculate_tax(subtotal: number) -> number {
+fun calculate_tax(subtotal: number) {
     return round(subtotal * 0.1, 2)  # 10% tax
 }
 
-fun calculate_shipping(subtotal: number) -> number {
+fun calculate_shipping(subtotal: number) {
     when subtotal >= 100 {
         return 0  # Free shipping over $100
     }

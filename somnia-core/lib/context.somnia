@@ -13,13 +13,13 @@ import "types.somnia"
 class ExecutionContext {
     field intent: Intent           # Current intent trigger
     field facts: FactStore         # World state
-    field drives: map              # name -> Drive
-    field affects: map             # name -> Affect
+    field drives: map              # name
+    field affects: map             # name
     field seed: number             # Random seed for determinism
     field timestamp: number        # Current timestamp (ms)
     field memory: map              # Persistent agent memory
     
-    method get_drive(name: string) -> Drive {
+    method get_drive(name: string) {
         when name in self.drives => return self.drives[name]
         return null
     }
@@ -28,7 +28,7 @@ class ExecutionContext {
         self.drives[name] = create_drive(name, intensity)
     }
     
-    method get_affect(name: string) -> Affect {
+    method get_affect(name: string) {
         when name in self.affects => return self.affects[name]
         return null
     }
@@ -37,7 +37,7 @@ class ExecutionContext {
         self.affects[name] = create_affect(name, valence)
     }
     
-    method get_memory(key: string) -> Value {
+    method get_memory(key: string) {
         when key in self.memory => return self.memory[key]
         return value_null()
     }
@@ -46,7 +46,7 @@ class ExecutionContext {
         self.memory[key] = value
     }
     
-    method clone() -> ExecutionContext {
+    method clone() {
         return ExecutionContext {
             intent: self.intent,
             facts: self.facts,         # Note: shares reference
@@ -59,7 +59,7 @@ class ExecutionContext {
     }
 }
 
-fun create_execution_context(intent: Intent, facts: FactStore) -> ExecutionContext {
+fun create_execution_context(intent: Intent, facts: FactStore) {
     return ExecutionContext {
         intent: intent,
         facts: facts,
@@ -71,7 +71,7 @@ fun create_execution_context(intent: Intent, facts: FactStore) -> ExecutionConte
     }
 }
 
-fun create_execution_context_with_seed(intent: Intent, facts: FactStore, seed: number) -> ExecutionContext {
+fun create_execution_context_with_seed(intent: Intent, facts: FactStore, seed: number) {
     return ExecutionContext {
         intent: intent,
         facts: facts,
@@ -83,7 +83,7 @@ fun create_execution_context_with_seed(intent: Intent, facts: FactStore, seed: n
     }
 }
 
-fun clone_map(m: map) -> map {
+fun clone_map(m: map) {
     var result = {}
     for key in native_keys(m) {
         result[key] = m[key]

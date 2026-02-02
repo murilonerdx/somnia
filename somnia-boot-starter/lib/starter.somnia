@@ -1,0 +1,34 @@
+/*
+ * Somnia Boot Starter
+ */
+
+import { create_app } from "somnia-web/lib/web"
+import { create_logger } from "somnia-logging/lib/logging"
+import { create_config } from "somnia-config/lib/config"
+
+fun bootstrap_app(name, port) {
+    println("[DEBUG] Bootstrapping " + name)
+    var config = create_config()
+    println("[DEBUG] Config created")
+    var logger = create_logger(name)
+    println("[DEBUG] Logger created")
+    var app = create_app()
+    println("[DEBUG] App created")
+    
+    logger.info("Bootstrapping Somnia Application...", { port: port })
+    
+    # Pre-configure middleware
+    app.use(fun(ctx) {
+        logger.info("Request received", { path: ctx.req.path, verb: ctx.req.verb })
+    })
+    
+    return {
+        app: app,
+        config: config,
+        logger: logger
+    }
+}
+
+export {
+    bootstrap_app
+}

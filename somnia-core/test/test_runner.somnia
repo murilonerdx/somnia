@@ -34,14 +34,14 @@ class TestSuite {
         self.total_duration_ms = self.total_duration_ms + result.duration_ms
     }
     
-    method summary() -> string {
+    method summary() {
         var total = len(self.results)
         var status = if self.failed == 0 then "PASSED" else "FAILED"
         return self.name + ": " + native_to_string(self.passed) + "/" + native_to_string(total) + " " + status
     }
 }
 
-fun run_test(name: string, test_fn: fun) -> TestResult {
+fun run_test(name: string, test_fn: fun) {
     var start = native_time_ms()
     var passed = true
     var error = ""
@@ -131,7 +131,7 @@ fun run_all_tests() {
 # MODULE TEST RUNNERS
 # ============================================================================
 
-fun run_types_tests() -> TestSuite {
+fun run_types_tests() {
     var suite = TestSuite { name: "types", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
     
     suite.add_result(run_test("Value string truthiness", fun() {
@@ -184,7 +184,7 @@ fun run_types_tests() -> TestSuite {
     return suite
 }
 
-fun run_proposal_tests() -> TestSuite {
+fun run_proposal_tests() {
     var suite = TestSuite { name: "proposal", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
     
     suite.add_result(run_test("Proposal creation", fun() {
@@ -216,7 +216,7 @@ fun run_proposal_tests() -> TestSuite {
     return suite
 }
 
-fun run_condition_tests() -> TestSuite {
+fun run_condition_tests() {
     var suite = TestSuite { name: "condition", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
     
     suite.add_result(run_test("Intent matching", fun() {
@@ -248,7 +248,7 @@ fun run_condition_tests() -> TestSuite {
     return suite
 }
 
-fun run_context_tests() -> TestSuite {
+fun run_context_tests() {
     var suite = TestSuite { name: "context", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
     
     suite.add_result(run_test("Context creation", fun() {
@@ -265,7 +265,7 @@ fun run_context_tests() -> TestSuite {
     return suite
 }
 
-fun run_rule_tests() -> TestSuite {
+fun run_rule_tests() {
     var suite = TestSuite { name: "rule", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
     
     suite.add_result(run_test("Rule matching", fun() {
@@ -285,7 +285,7 @@ fun run_rule_tests() -> TestSuite {
     return suite
 }
 
-fun run_id_engine_tests() -> TestSuite {
+fun run_id_engine_tests() {
     var suite = TestSuite { name: "id_engine", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
     
     suite.add_result(run_test("ID evaluation", fun() {
@@ -304,7 +304,7 @@ fun run_id_engine_tests() -> TestSuite {
     return suite
 }
 
-fun run_ego_tests() -> TestSuite {
+fun run_ego_tests() {
     var suite = TestSuite { name: "ego", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
     
     suite.add_result(run_test("EGO forbid", fun() {
@@ -331,7 +331,7 @@ fun run_ego_tests() -> TestSuite {
     return suite
 }
 
-fun run_act_tests() -> TestSuite {
+fun run_act_tests() {
     var suite = TestSuite { name: "act", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
     
     suite.add_result(run_test("ActionResult success", fun() {
@@ -353,7 +353,7 @@ fun run_act_tests() -> TestSuite {
     return suite
 }
 
-fun run_runtime_tests() -> TestSuite {
+fun run_runtime_tests() {
     var suite = TestSuite { name: "runtime", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
     
     suite.add_result(run_test("Runtime cycle", fun() {
@@ -374,7 +374,7 @@ fun run_runtime_tests() -> TestSuite {
     return suite
 }
 
-fun run_ffi_tests() -> TestSuite {
+fun run_ffi_tests() {
     var suite = TestSuite { name: "ffi", results: [], passed: 0, failed: 0, total_duration_ms: 0 }
     
     suite.add_result(run_test("FFI action creation", fun() {

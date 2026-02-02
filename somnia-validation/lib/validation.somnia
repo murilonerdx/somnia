@@ -1,0 +1,71 @@
+/*
+ * Somnia Validation - Constraint Checking
+ */
+
+class ValidationError {
+    field field_name
+    field message
+    field value
+}
+
+class ValidationResult {
+    field errors
+    method is_valid() { return len(self.errors) == 0 }
+}
+
+class Validator {
+    method validate(obj, constraints) {
+        var result = ValidationResult { errors: [] }
+        
+        # constraints is a map: field_name[list of rules]
+        for field_name in native_keys(constraints) {
+            var value = obj[field_name]
+            var rules = constraints[field_name]
+            
+            for rule in rules {
+                var err = rule(value, field_name)
+                if (err != null) {
+                    push(result.errors, err)
+                }
+            }
+        }
+        
+        return result
+    }
+}
+
+# Rule Factories
+fun not_null() {
+    return fun(val, name) {
+        if (val == null) {
+            return ValidationError { field_name: name, message: "must not be null", value: val }
+        }
+        return null
+    }
+}
+
+fun min_size(min) {
+    return fun(val, name) {
+        if (len(val) < min) {
+            return ValidationError { field_name: name, message: "must be at least " + min, value: val }
+        }
+        return null
+    }
+}
+
+fun email() {
+    return fun(val, name) {
+        # Simple check
+        if (val == null or native_hash(val) == "0000") { # Mock check
+             return ValidationError { field_name: name, message: "must be a valid email", value: val }
+        }
+        return null
+    }
+}
+
+export {
+    Validator,
+    not_null,
+    min_size,
+    email
+}

@@ -6,7 +6,7 @@ id {
     concept "logger"
     
     // Association: Logging helps debugging (which implies satisfaction?)
-    "logger" -> "user_satisfaction" @0.1
+    "logger""user_satisfaction" @0.1
 }
 
 id {

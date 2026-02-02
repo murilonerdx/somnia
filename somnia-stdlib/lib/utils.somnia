@@ -7,11 +7,11 @@
 # UUID GENERATION
 # ============================================================================
 
-fun uuid() -> string {
+fun uuid() {
     return uuid_v4()
 }
 
-fun uuid_v4() -> string {
+fun uuid_v4() {
     var hex_chars = "0123456789abcdef"
     var result = ""
     
@@ -35,7 +35,7 @@ fun uuid_v4() -> string {
     return result
 }
 
-fun short_id() -> string {
+fun short_id() {
     var chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
     var result = ""
     
@@ -60,7 +60,7 @@ class DateTime {
     field minute: number
     field second: number
     
-    method to_iso_string() -> string {
+    method to_iso_string() {
         return native_to_string(self.year) + "-" +
                pad_number(self.month, 2) + "-" +
                pad_number(self.day, 2) + "T" +
@@ -69,32 +69,32 @@ class DateTime {
                pad_number(self.second, 2) + "Z"
     }
     
-    method to_date_string() -> string {
+    method to_date_string() {
         return native_to_string(self.year) + "-" +
                pad_number(self.month, 2) + "-" +
                pad_number(self.day, 2)
     }
     
-    method to_time_string() -> string {
+    method to_time_string() {
         return pad_number(self.hour, 2) + ":" +
                pad_number(self.minute, 2) + ":" +
                pad_number(self.second, 2)
     }
     
-    method add_days(days: number) -> DateTime {
+    method add_days(days: number) {
         return from_timestamp(self.timestamp + days * 86400000)
     }
     
-    method add_hours(hours: number) -> DateTime {
+    method add_hours(hours: number) {
         return from_timestamp(self.timestamp + hours * 3600000)
     }
     
-    method add_minutes(minutes: number) -> DateTime {
+    method add_minutes(minutes: number) {
         return from_timestamp(self.timestamp + minutes * 60000)
     }
 }
 
-fun pad_number(n: number, width: number) -> string {
+fun pad_number(n: number, width: number) {
     var str = native_to_string(math_floor(n))
     while len(str) < width {
         str = "0" + str
@@ -102,12 +102,12 @@ fun pad_number(n: number, width: number) -> string {
     return str
 }
 
-fun now() -> DateTime {
+fun now() {
     var ts = native_time_ms()
     return from_timestamp(ts)
 }
 
-fun from_timestamp(ts: number) -> DateTime {
+fun from_timestamp(ts: number) {
     var date_info = native_parse_timestamp(ts)
     return DateTime {
         timestamp: ts,
@@ -120,7 +120,7 @@ fun from_timestamp(ts: number) -> DateTime {
     }
 }
 
-fun parse_date(str: string) -> DateTime {
+fun parse_date(str: string) {
     var parts = string_split(str, "-")
     return DateTime {
         timestamp: 0,
@@ -137,20 +137,20 @@ fun parse_date(str: string) -> DateTime {
 # RANDOM
 # ============================================================================
 
-fun random_int(min: number, max: number) -> number {
+fun random_int(min: number, max: number) {
     return math_floor(math_random() * (max - min + 1)) + min
 }
 
-fun random_float(min: number, max: number) -> number {
+fun random_float(min: number, max: number) {
     return math_random() * (max - min) + min
 }
 
-fun random_choice(items: list) -> any {
+fun random_choice(items: list) {
     var index = random_int(0, len(items) - 1)
     return items[index]
 }
 
-fun shuffle(items: list) -> list {
+fun shuffle(items: list) {
     var result = []
     for item in items {
         result = result + [item]
@@ -175,15 +175,15 @@ class Result {
     field value: any
     field error: string
     
-    method is_ok() -> bool {
+    method is_ok() {
         return self.success
     }
     
-    method is_err() -> bool {
+    method is_err() {
         return not self.success
     }
     
-    method unwrap() -> any {
+    method unwrap() {
         when not self.success => {
             println("[ERROR] Unwrap called on error result: " + self.error)
             return null
@@ -191,27 +191,27 @@ class Result {
         return self.value
     }
     
-    method unwrap_or(default_val: any) -> any {
+    method unwrap_or(default_val: any) {
         when not self.success => return default_val
         return self.value
     }
     
-    method map(fn: fun) -> Result {
+    method map(fn: fun) {
         when not self.success => return self
         return ok(fn(self.value))
     }
     
-    method flat_map(fn: fun) -> Result {
+    method flat_map(fn: fun) {
         when not self.success => return self
         return fn(self.value)
     }
 }
 
-fun ok(value: any) -> Result {
+fun ok(value: any) {
     return Result { success: true, value: value, error: "" }
 }
 
-fun err(message: string) -> Result {
+fun err(message: string) {
     return Result { success: false, value: null, error: message }
 }
 
@@ -223,15 +223,15 @@ class Option {
     field has_value: bool
     field value: any
     
-    method is_some() -> bool {
+    method is_some() {
         return self.has_value
     }
     
-    method is_none() -> bool {
+    method is_none() {
         return not self.has_value
     }
     
-    method unwrap() -> any {
+    method unwrap() {
         when not self.has_value => {
             println("[ERROR] Unwrap called on None")
             return null
@@ -239,22 +239,22 @@ class Option {
         return self.value
     }
     
-    method unwrap_or(default_val: any) -> any {
+    method unwrap_or(default_val: any) {
         when not self.has_value => return default_val
         return self.value
     }
     
-    method map(fn: fun) -> Option {
+    method map(fn: fun) {
         when not self.has_value => return none()
         return some(fn(self.value))
     }
 }
 
-fun some(value: any) -> Option {
+fun some(value: any) {
     return Option { has_value: true, value: value }
 }
 
-fun none() -> Option {
+fun none() {
     return Option { has_value: false, value: null }
 }
 

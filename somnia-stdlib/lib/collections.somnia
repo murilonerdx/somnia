@@ -7,7 +7,7 @@
 # LIST UTILITIES
 # ============================================================================
 
-fun map_list(items: list, fn: fun) -> list {
+fun map_list(items: list, fn: fun) {
     var result = []
     for item in items {
         result = result + [fn(item)]
@@ -15,7 +15,7 @@ fun map_list(items: list, fn: fun) -> list {
     return result
 }
 
-fun filter_list(items: list, predicate: fun) -> list {
+fun filter_list(items: list, predicate: fun) {
     var result = []
     for item in items {
         when predicate(item) => result = result + [item]
@@ -23,7 +23,7 @@ fun filter_list(items: list, predicate: fun) -> list {
     return result
 }
 
-fun reduce_list(items: list, initial: any, fn: fun) -> any {
+fun reduce_list(items: list, initial: any, fn: fun) {
     var acc = initial
     for item in items {
         acc = fn(acc, item)
@@ -31,35 +31,35 @@ fun reduce_list(items: list, initial: any, fn: fun) -> any {
     return acc
 }
 
-fun find_in_list(items: list, predicate: fun) -> any {
+fun find_in_list(items: list, predicate: fun) {
     for item in items {
         when predicate(item) => return item
     }
     return null
 }
 
-fun find_index(items: list, predicate: fun) -> number {
+fun find_index(items: list, predicate: fun) {
     for i in range(0, len(items)) {
         when predicate(items[i]) => return i
     }
     return -1
 }
 
-fun every(items: list, predicate: fun) -> bool {
+fun every(items: list, predicate: fun) {
     for item in items {
         when not predicate(item) => return false
     }
     return true
 }
 
-fun some(items: list, predicate: fun) -> bool {
+fun some(items: list, predicate: fun) {
     for item in items {
         when predicate(item) => return true
     }
     return false
 }
 
-fun reverse_list(items: list) -> list {
+fun reverse_list(items: list) {
     var result = []
     for i in range(len(items) - 1, -1, -1) {
         result = result + [items[i]]
@@ -67,7 +67,7 @@ fun reverse_list(items: list) -> list {
     return result
 }
 
-fun slice_list(items: list, start: number, end: number) -> list {
+fun slice_list(items: list, start: number, end: number) {
     var result = []
     for i in range(start, min(end, len(items))) {
         result = result + [items[i]]
@@ -75,7 +75,7 @@ fun slice_list(items: list, start: number, end: number) -> list {
     return result
 }
 
-fun flatten(items: list) -> list {
+fun flatten(items: list) {
     var result = []
     for item in items {
         when native_type(item) == "list" => {
@@ -88,7 +88,7 @@ fun flatten(items: list) -> list {
     return result
 }
 
-fun unique(items: list) -> list {
+fun unique(items: list) {
     var seen = {}
     var result = []
     for item in items {
@@ -101,7 +101,7 @@ fun unique(items: list) -> list {
     return result
 }
 
-fun group_by(items: list, key_fn: fun) -> map {
+fun group_by(items: list, key_fn: fun) {
     var groups = {}
     for item in items {
         var key = key_fn(item)
@@ -111,23 +111,23 @@ fun group_by(items: list, key_fn: fun) -> map {
     return groups
 }
 
-fun sort_by(items: list, key_fn: fun) -> list {
-    return native_sort(items, fun(a: any, b: any) -> number {
+fun sort_by(items: list, key_fn: fun) {
+    return native_sort(items, fun(a: any, b: any) {
         var ka = key_fn(a)
         var kb = key_fn(b)
         return native_compare(ka, kb)
     })
 }
 
-fun take(items: list, n: number) -> list {
+fun take(items: list, n: number) {
     return slice_list(items, 0, n)
 }
 
-fun drop(items: list, n: number) -> list {
+fun drop(items: list, n: number) {
     return slice_list(items, n, len(items))
 }
 
-fun zip(list1: list, list2: list) -> list {
+fun zip(list1: list, list2: list) {
     var result = []
     var length = min(len(list1), len(list2))
     for i in range(0, length) {
@@ -140,7 +140,7 @@ fun zip(list1: list, list2: list) -> list {
 # MAP UTILITIES
 # ============================================================================
 
-fun map_values(m: map, fn: fun) -> map {
+fun map_values(m: map, fn: fun) {
     var result = {}
     for key in native_keys(m) {
         result[key] = fn(m[key])
@@ -148,7 +148,7 @@ fun map_values(m: map, fn: fun) -> map {
     return result
 }
 
-fun filter_map(m: map, predicate: fun) -> map {
+fun filter_map(m: map, predicate: fun) {
     var result = {}
     for key in native_keys(m) {
         when predicate(key, m[key]) => result[key] = m[key]
@@ -156,7 +156,7 @@ fun filter_map(m: map, predicate: fun) -> map {
     return result
 }
 
-fun merge_maps(m1: map, m2: map) -> map {
+fun merge_maps(m1: map, m2: map) {
     var result = {}
     for key in native_keys(m1) {
         result[key] = m1[key]
@@ -167,7 +167,7 @@ fun merge_maps(m1: map, m2: map) -> map {
     return result
 }
 
-fun pick(m: map, keys: list) -> map {
+fun pick(m: map, keys: list) {
     var result = {}
     for key in keys {
         when key in m => result[key] = m[key]
@@ -175,7 +175,7 @@ fun pick(m: map, keys: list) -> map {
     return result
 }
 
-fun omit(m: map, keys: list) -> map {
+fun omit(m: map, keys: list) {
     var result = {}
     var omit_set = {}
     for k in keys {
@@ -187,7 +187,7 @@ fun omit(m: map, keys: list) -> map {
     return result
 }
 
-fun entries(m: map) -> list {
+fun entries(m: map) {
     var result = []
     for key in native_keys(m) {
         result = result + [{ "key": key, "value": m[key] }]
@@ -195,7 +195,7 @@ fun entries(m: map) -> list {
     return result
 }
 
-fun from_entries(entries_list: list) -> map {
+fun from_entries(entries_list: list) {
     var result = {}
     for entry in entries_list {
         result[entry["key"]] = entry["value"]

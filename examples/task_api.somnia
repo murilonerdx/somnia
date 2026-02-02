@@ -26,16 +26,16 @@ var task_counter = 0
 # HELPER FUNCTIONS
 # ============================================================================
 
-fun generate_id() -> string {
+fun generate_id() {
     task_counter = task_counter + 1
     return "task_" + to_string(task_counter)
 }
 
-fun now() -> number {
+fun now() {
     return time_ms()
 }
 
-fun task_to_json(task: Task) -> map {
+fun task_to_json(task: Task) {
     return {
         "id": task.id,
         "title": task.title,
@@ -48,7 +48,7 @@ fun task_to_json(task: Task) -> map {
     }
 }
 
-fun tasks_to_list() -> list {
+fun tasks_to_list() {
     var result = []
     for id in keys(tasks) {
         result = result + [task_to_json(tasks[id])]

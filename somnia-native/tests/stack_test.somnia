@@ -1,0 +1,10 @@
+fun stack_overflow() {
+    stack_overflow()
+}
+
+println("Starting Stack Overflow Test...")
+# Ideally try/catch would catch it, but stack overflow might be fatal if signal handler exit(1).
+# We expect "CRASH DETECTED" or "Stack overflow" log.
+# If interpreter handles it nicely, it should print error and return null.
+stack_overflow()
+println("Finished (If you see this, guard failed to stop recursion early or guard worked very silently)")

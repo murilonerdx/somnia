@@ -25,7 +25,7 @@ class Value {
     field type: string      # "string", "number", "bool", "null", "list", "map", "object"
     field data: any
     
-    method is_truthy() -> bool {
+    method is_truthy() {
         when self.type == "null" => return false
         when self.type == "bool" => return self.data
         when self.type == "number" => return self.data != 0
@@ -35,12 +35,12 @@ class Value {
         default => return true
     }
     
-    method equals(other: Value) -> bool {
+    method equals(other: Value) {
         when self.type != other.type => return false
         return self.data == other.data
     }
     
-    method to_string() -> string {
+    method to_string() {
         when self.type == "null" => return "null"
         when self.type == "bool" => return if self.data then "true" else "false"
         when self.type == "string" => return self.data
@@ -49,27 +49,27 @@ class Value {
 }
 
 # Factory functions for Value
-fun value_string(s: string) -> Value {
+fun value_string(s: string) {
     return Value { type: "string", data: s }
 }
 
-fun value_number(n: number) -> Value {
+fun value_number(n: number) {
     return Value { type: "number", data: n }
 }
 
-fun value_bool(b: bool) -> Value {
+fun value_bool(b: bool) {
     return Value { type: "bool", data: b }
 }
 
-fun value_null() -> Value {
+fun value_null() {
     return Value { type: "null", data: null }
 }
 
-fun value_list(items: list) -> Value {
+fun value_list(items: list) {
     return Value { type: "list", data: items }
 }
 
-fun value_map(entries: map) -> Value {
+fun value_map(entries: map) {
     return Value { type: "map", data: entries }
 }
 
@@ -81,17 +81,17 @@ class Intent {
     field name: string
     field args: map
     
-    method get(key: string) -> Value {
+    method get(key: string) {
         when key in self.args => return self.args[key]
         return value_null()
     }
     
-    method has(key: string) -> bool {
+    method has(key: string) {
         return key in self.args
     }
 }
 
-fun create_intent(name: string, args: map) -> Intent {
+fun create_intent(name: string, args: map) {
     return Intent { name: name, args: args }
 }
 
@@ -111,12 +111,12 @@ class FactStore {
         self.facts[key] = value
     }
     
-    method get(key: string) -> Value {
+    method get(key: string) {
         when key in self.facts => return self.facts[key]
         return value_null()
     }
     
-    method has(key: string) -> bool {
+    method has(key: string) {
         return key in self.facts
     }
     
@@ -124,12 +124,12 @@ class FactStore {
         when key in self.facts => delete self.facts[key]
     }
     
-    method keys() -> list {
+    method keys() {
         return native_keys(self.facts)
     }
 }
 
-fun create_fact_store() -> FactStore {
+fun create_fact_store() {
     return FactStore { facts: {} }
 }
 
@@ -141,7 +141,7 @@ class Drive {
     field name: string
     field intensity: number     # 0.0 to 1.0
     
-    method is_active() -> bool {
+    method is_active() {
         return self.intensity > 0.1
     }
     
@@ -154,7 +154,7 @@ class Drive {
     }
 }
 
-fun create_drive(name: string, intensity: number) -> Drive {
+fun create_drive(name: string, intensity: number) {
     return Drive { name: name, intensity: clamp(intensity, 0.0, 1.0) }
 }
 
@@ -166,20 +166,20 @@ class Affect {
     field name: string
     field valence: number       # -1.0 to 1.0
     
-    method is_positive() -> bool {
+    method is_positive() {
         return self.valence > 0
     }
     
-    method is_negative() -> bool {
+    method is_negative() {
         return self.valence < 0
     }
     
-    method is_neutral() -> bool {
+    method is_neutral() {
         return self.valence == 0
     }
 }
 
-fun create_affect(name: string, valence: number) -> Affect {
+fun create_affect(name: string, valence: number) {
     return Affect { name: name, valence: clamp(valence, -1.0, 1.0) }
 }
 
@@ -187,18 +187,18 @@ fun create_affect(name: string, valence: number) -> Affect {
 # HELPER FUNCTIONS
 # ============================================================================
 
-fun clamp(value: number, min_val: number, max_val: number) -> number {
+fun clamp(value: number, min_val: number, max_val: number) {
     when value < min_val => return min_val
     when value > max_val => return max_val
     return value
 }
 
-fun min(a: number, b: number) -> number {
+fun min(a: number, b: number) {
     when a < b => return a
     return b
 }
 
-fun max(a: number, b: number) -> number {
+fun max(a: number, b: number) {
     when a > b => return a
     return b
 }

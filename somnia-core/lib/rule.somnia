@@ -23,11 +23,11 @@ class Rule {
     field affect_modifiers: list    # List of {affect: string, factor: number}
     field description: string
     
-    method matches(ctx: ExecutionContext) -> bool {
+    method matches(ctx: ExecutionContext) {
         return self.condition.evaluate(ctx)
     }
     
-    method calculate_weight(ctx: ExecutionContext) -> number {
+    method calculate_weight(ctx: ExecutionContext) {
         var weight = self.base_weight
         
         # Apply drive modifiers
@@ -49,7 +49,7 @@ class Rule {
         return clamp(weight, 0.0, 1.0)
     }
     
-    method generate_proposal(ctx: ExecutionContext) -> Proposal {
+    method generate_proposal(ctx: ExecutionContext) {
         var weight = self.calculate_weight(ctx)
         var args = resolve_action_args(self.action_args, ctx)
         
@@ -62,13 +62,13 @@ class Rule {
         )
     }
     
-    method to_string() -> string {
+    method to_string() {
         return "Rule(" + self.id + ": when ... => " + self.action + " @" + native_to_string(self.base_weight) + ")"
     }
 }
 
 # Resolve action argument templates
-fun resolve_action_args(template: map, ctx: ExecutionContext) -> map {
+fun resolve_action_args(template: map, ctx: ExecutionContext) {
     var result = {}
     
     for key in native_keys(template) {
@@ -87,7 +87,7 @@ fun resolve_action_args(template: map, ctx: ExecutionContext) -> map {
     return result
 }
 
-fun resolve_reference(ref: string, ctx: ExecutionContext) -> Value {
+fun resolve_reference(ref: string, ctx: ExecutionContext) {
     when ref.starts_with("intent.") {
         var key = ref.substring(7)
         return ctx.intent.get(key)
@@ -110,62 +110,62 @@ fun resolve_reference(ref: string, ctx: ExecutionContext) -> Value {
 class RuleBuilder {
     field rule: Rule
     
-    method when_intent(name: string) -> RuleBuilder {
+    method when_intent(name: string) {
         self.rule.condition = cond_intent(name)
         return self
     }
     
-    method and_fact(key: string) -> RuleBuilder {
+    method and_fact(key: string) {
         self.rule.condition = cond_and(self.rule.condition, cond_fact(key))
         return self
     }
     
-    method and_not_fact(key: string) -> RuleBuilder {
+    method and_not_fact(key: string) {
         self.rule.condition = cond_and(self.rule.condition, cond_not(cond_fact(key)))
         return self
     }
     
-    method and_drive_gt(name: string, threshold: number) -> RuleBuilder {
+    method and_drive_gt(name: string, threshold: number) {
         self.rule.condition = cond_and(self.rule.condition, cond_drive_gt(name, threshold))
         return self
     }
     
-    method propose(action: string) -> RuleBuilder {
+    method propose(action: string) {
         self.rule.action = action
         return self
     }
     
-    method with_args(args: map) -> RuleBuilder {
+    method with_args(args: map) {
         self.rule.action_args = args
         return self
     }
     
-    method weight(w: number) -> RuleBuilder {
+    method weight(w: number) {
         self.rule.base_weight = w
         return self
     }
     
-    method boost_by_drive(drive: string, factor: number) -> RuleBuilder {
+    method boost_by_drive(drive: string, factor: number) {
         self.rule.drive_modifiers = self.rule.drive_modifiers + [{ "drive": drive, "factor": factor }]
         return self
     }
     
-    method boost_by_affect(affect: string, factor: number) -> RuleBuilder {
+    method boost_by_affect(affect: string, factor: number) {
         self.rule.affect_modifiers = self.rule.affect_modifiers + [{ "affect": affect, "factor": factor }]
         return self
     }
     
-    method describe(text: string) -> RuleBuilder {
+    method describe(text: string) {
         self.rule.description = text
         return self
     }
     
-    method build() -> Rule {
+    method build() {
         return self.rule
     }
 }
 
-fun rule(id: string) -> RuleBuilder {
+fun rule(id: string) {
     return RuleBuilder {
         rule: Rule {
             id: id,
@@ -181,7 +181,7 @@ fun rule(id: string) -> RuleBuilder {
     }
 }
 
-fun create_rule(id: string, line: number, condition: Condition, action: string, weight: number) -> Rule {
+fun create_rule(id: string, line: number, condition: Condition, action: string, weight: number) {
     return Rule {
         id: id,
         line: line,

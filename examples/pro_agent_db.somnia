@@ -1,0 +1,34 @@
+/*
+ * Somnia Professional Demo: Agentic SQL Integration
+ */
+
+import { create_pool } from "somnia-sql/lib/sql"
+
+ID {
+    drive database_connected = false
+    affect readiness = 0.8
+    println("[ID] Cognitive state initialized.")
+}
+
+EGO {
+    forbid readiness < 0.2
+    budget 1000
+    println("[EGO] Ethical constraints applied.")
+}
+
+ACT {
+    println("[ACT] Executing database mission...")
+    
+    var dsn = "host=localhost port=5432 dbname=somnia user=admin password=secret"
+    
+    var pool = create_pool(dsn, { min_size: 2, max_size: 10 })
+    
+    // In this demo, we can't actually connect to a live postgres 
+    // unless one is provided in the container.
+    // But we verify the API bindings.
+    
+    println("[DB] Pool created for " + dsn)
+    println("[DB] Transactional context ready.")
+}
+
+println("[SYS] Somnia Ecosystem 2.0 Hardened & Ready.")

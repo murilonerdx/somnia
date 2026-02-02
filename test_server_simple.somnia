@@ -1,0 +1,16 @@
+
+import { native_http_server_start } from "./somnia-http/lib/http"
+
+println("Starting Simple Server Test")
+
+fun handler(req) {
+    println("Request received: " + req["path"])
+    return {
+        "status": 200,
+        "body": "{\"message\": \"Hello World\"}"
+    }
+}
+
+native_http_server_start(8080, handler)
+
+println("Server exited unexpectedly")

@@ -1,0 +1,35 @@
+/*
+ * Somnia Serde Generator
+ * Generates Serialize/Deserialize methods to avoid runtime reflection.
+ */
+
+fun generate_serde(class_name, fields) {
+    println("# Generated Serde for " + class_name)
+    println("class " + class_name + "Serde {")
+    
+    # Generate to_map
+    println("    fun to_map(obj) {")
+    println("        var m = {}")
+    for f in fields {
+        println("        m[\"" + f + "\"] = obj." + f)
+    }
+    println("        return m")
+    println("    }")
+    
+    # Generate from_map
+    println("    fun from_map(m) {")
+    println("        return " + class_name + " {")
+    for i in range(0, len(fields)) {
+        var f = fields[i]
+        var comma = ""
+        when i < len(fields) - 1 => comma = ","
+        println("            " + f + ": m[\"" + f + "\"]" + comma)
+    }
+    println("        }")
+    println("    }")
+    println("}")
+}
+
+# Example usage
+# var fields = ["id", "username", "email", "active"]
+# generate_serde("User", fields)

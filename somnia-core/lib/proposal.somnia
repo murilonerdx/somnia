@@ -17,7 +17,7 @@ class Proposal {
     field rule_line: number     # Source line
     field explanation: string   # Why this was proposed
     
-    method with_weight(new_weight: number) -> Proposal {
+    method with_weight(new_weight: number) {
         return Proposal {
             action: self.action,
             args: self.args,
@@ -28,7 +28,7 @@ class Proposal {
         }
     }
     
-    method with_explanation(text: string) -> Proposal {
+    method with_explanation(text: string) {
         return Proposal {
             action: self.action,
             args: self.args,
@@ -39,12 +39,12 @@ class Proposal {
         }
     }
     
-    method to_string() -> string {
+    method to_string() {
         return "Proposal(" + self.action + " @" + native_to_string(self.weight) + ")"
     }
 }
 
-fun create_proposal(action: string, args: map, weight: number, rule_id: string, line: number) -> Proposal {
+fun create_proposal(action: string, args: map, weight: number, rule_id: string, line: number) {
     return Proposal {
         action: action,
         args: args,
@@ -66,15 +66,15 @@ class ProposalList {
         self.items = self.items + [proposal]
     }
     
-    method count() -> number {
+    method count() {
         return len(self.items)
     }
     
-    method is_empty() -> bool {
+    method is_empty() {
         return len(self.items) == 0
     }
     
-    method get(index: number) -> Proposal {
+    method get(index: number) {
         return self.items[index]
     }
     
@@ -85,7 +85,7 @@ class ProposalList {
         })
     }
     
-    method top(n: number) -> ProposalList {
+    method top(n: number) {
         var result = create_proposal_list()
         var count = min(n, len(self.items))
         
@@ -96,7 +96,7 @@ class ProposalList {
         return result
     }
     
-    method filter(predicate: fun) -> ProposalList {
+    method filter(predicate: fun) {
         var result = create_proposal_list()
         
         for proposal in self.items {
@@ -106,16 +106,16 @@ class ProposalList {
         return result
     }
     
-    method to_list() -> list {
+    method to_list() {
         return self.items
     }
 }
 
-fun create_proposal_list() -> ProposalList {
+fun create_proposal_list() {
     return ProposalList { items: [] }
 }
 
-fun proposal_list_from(items: list) -> ProposalList {
+fun proposal_list_from(items: list) {
     return ProposalList { items: items }
 }
 
@@ -129,7 +129,7 @@ class SelectedProposal {
     field reason: string
 }
 
-fun create_selected(proposal: Proposal, rank: number, reason: string) -> SelectedProposal {
+fun create_selected(proposal: Proposal, rank: number, reason: string) {
     return SelectedProposal {
         proposal: proposal,
         rank: rank,
@@ -147,7 +147,7 @@ class RejectedProposal {
     field policy_id: string
 }
 
-fun create_rejected(proposal: Proposal, reason: string, policy_id: string) -> RejectedProposal {
+fun create_rejected(proposal: Proposal, reason: string, policy_id: string) {
     return RejectedProposal {
         proposal: proposal,
         reason: reason,
@@ -163,21 +163,21 @@ class SelectionResult {
     field selected: list        # List of SelectedProposal
     field rejected: list        # List of RejectedProposal
     
-    method selected_count() -> number {
+    method selected_count() {
         return len(self.selected)
     }
     
-    method rejected_count() -> number {
+    method rejected_count() {
         return len(self.rejected)
     }
     
-    method first_selected() -> SelectedProposal {
+    method first_selected() {
         when len(self.selected) > 0 => return self.selected[0]
         return null
     }
 }
 
-fun create_selection_result() -> SelectionResult {
+fun create_selection_result() {
     return SelectionResult {
         selected: [],
         rejected: []

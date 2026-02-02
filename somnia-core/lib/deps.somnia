@@ -14,11 +14,11 @@ class Dependency {
     field path: string         # Local path or URL
     field optional: bool
     
-    method to_string() -> string {
+    method to_string() {
         return self.name + "@" + self.version
     }
     
-    method matches(name: string, version: string) -> bool {
+    method matches(name: string, version: string) {
         when self.name != name => return false
         # TODO: semver matching
         return self.version == version or version == "*"
@@ -33,14 +33,14 @@ class DependencyGroup {
         self.dependencies = self.dependencies + [dep]
     }
     
-    method find(name: string) -> Dependency {
+    method find(name: string) {
         for dep in self.dependencies {
             when dep.name == name => return dep
         }
         return null
     }
     
-    method has(name: string) -> bool {
+    method has(name: string) {
         return self.find(name) != null
     }
 }
@@ -52,7 +52,7 @@ class DepsManifest {
     field dev: DependencyGroup
     field test: DependencyGroup
     
-    method all_dependencies() -> list {
+    method all_dependencies() {
         var all = []
         for dep in self.main.dependencies {
             all = all + [dep]
@@ -66,7 +66,7 @@ class DepsManifest {
         return all
     }
     
-    method find(name: string) -> Dependency {
+    method find(name: string) {
         var dep = self.main.find(name)
         when dep != null => return dep
         
@@ -86,7 +86,7 @@ class DepsParser {
     field position: number
     field line: number
     
-    method parse() -> DepsManifest {
+    method parse() {
         var project_name = "unnamed"
         var version = "0.0.0"
         var main_deps = DependencyGroup { name: "main", dependencies: [] }
@@ -160,7 +160,7 @@ class DepsParser {
         }
     }
     
-    method parse_require() -> Dependency {
+    method parse_require() {
         self.skip_whitespace()
         var name = self.parse_string()
         var version = "*"
@@ -207,7 +207,7 @@ class DepsParser {
         }
     }
     
-    method parse_string() -> string {
+    method parse_string() {
         self.skip_whitespace()
         self.expect("\"")
         var result = ""
@@ -221,7 +221,7 @@ class DepsParser {
         return result
     }
     
-    method parse_identifier() -> string {
+    method parse_identifier() {
         var start = self.position
         
         while self.position < len(self.input) {
@@ -234,7 +234,7 @@ class DepsParser {
     }
     
     # Helper methods
-    method peek() -> string {
+    method peek() {
         when self.position >= len(self.input) => return ""
         return string_substring(self.input, self.position, self.position + 1)
     }
@@ -250,7 +250,7 @@ class DepsParser {
         when self.peek() == char => self.advance()
     }
     
-    method match_word(word: string) -> bool {
+    method match_word(word: string) {
         var end_pos = self.position + len(word)
         when end_pos > len(self.input) => return false
         
@@ -280,11 +280,11 @@ class DepsParser {
         when self.peek() == "\n" => self.advance()
     }
     
-    method is_digit(char: string) -> bool {
+    method is_digit(char: string) {
         return char >= "0" and char <= "9"
     }
     
-    method is_letter(char: string) -> bool {
+    method is_letter(char: string) {
         return (char >= "a" and char <= "z") or (char >= "A" and char <= "Z")
     }
 }
@@ -293,12 +293,12 @@ class DepsParser {
 # FACTORY FUNCTIONS
 # ============================================================================
 
-fun parse_deps(input: string) -> DepsManifest {
+fun parse_deps(input: string) {
     var parser = DepsParser { input: input, position: 0, line: 1 }
     return parser.parse()
 }
 
-fun load_deps(path: string) -> DepsManifest {
+fun load_deps(path: string) {
     var content = native_read_file(path)
     return parse_deps(content)
 }
@@ -312,7 +312,7 @@ class DependencyResolver {
     field resolved: map
     field base_path: string
     
-    method resolve_all() -> list {
+    method resolve_all() {
         var resolved_deps = []
         
         for dep in self.manifest.all_dependencies() {
@@ -325,7 +325,7 @@ class DependencyResolver {
         return resolved_deps
     }
     
-    method resolve(dep: Dependency) -> Dependency {
+    method resolve(dep: Dependency) {
         when dep.source == "local" => {
             # Resolve local dependency
             var full_path = self.base_path + "/" + dep.path
@@ -342,7 +342,7 @@ class DependencyResolver {
     }
 }
 
-fun create_resolver(manifest: DepsManifest, base_path: string) -> DependencyResolver {
+fun create_resolver(manifest: DepsManifest, base_path: string) {
     return DependencyResolver {
         manifest: manifest,
         resolved: {},

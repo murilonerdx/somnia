@@ -1,0 +1,57 @@
+/*
+ * Somnia Config - Configuration Management
+ */
+
+import { json_parse } from "somnia-json/lib/json"
+
+class Config {
+    field values
+    field profile
+    
+    method get(key, default_val) {
+        if (key in self.values) {
+            return self.values[key]
+        }
+        return default_val
+    }
+    
+    method load_env_file(path) {
+        # Simple .env parser
+        var content = native_fs_read(path)
+        if (content == null) { return }
+        
+        var lines = split(content, "\n")
+        for line in lines {
+            var trimmed = trim(line)
+            if (len(trimmed) == 0 or substring(trimmed, 0, 1) == "#") { continue }
+            
+            var parts = split(trimmed, "=")
+            if (len(parts) >= 2) {
+                var key = trim(parts[0])
+                var val = trim(parts[1])
+                self.values[key] = val
+            }
+        }
+    }
+    
+    method load_json(path) {
+        var content = native_fs_read(path)
+        if (content == null) { return }
+        var data = json_parse(content)
+        if (data.type == "object") {
+            for key in native_keys(data.data) {
+                self.values[key] = data.data[key].data
+            }
+        }
+    }
+}
+
+fun create_config() {
+    var c = Config { values: {}, profile: "dev" }
+    return c
+}
+
+export {
+    Config,
+    create_config
+}

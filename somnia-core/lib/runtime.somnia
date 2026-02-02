@@ -27,7 +27,7 @@ class Trace {
     field results: list
     field total_duration_ms: number
     
-    method to_json() -> string {
+    method to_json() {
         return native_to_json({
             "cycle_id": self.cycle_id,
             "timestamp": self.timestamp,
@@ -40,7 +40,7 @@ class Trace {
     }
 }
 
-fun create_trace() -> Trace {
+fun create_trace() {
     return Trace {
         cycle_id: "",
         timestamp: 0,
@@ -67,14 +67,14 @@ class CycleResult {
     field trace: Trace
     field response: Value               # Response set by 'respond' action
     
-    method is_success() -> bool {
+    method is_success() {
         for r in self.results {
             when not r.is_success() => return false
         }
         return true
     }
     
-    method first_error() -> ActionResult {
+    method first_error() {
         for r in self.results {
             when r.is_error() => return r
         }
@@ -82,7 +82,7 @@ class CycleResult {
     }
 }
 
-fun create_cycle_result() -> CycleResult {
+fun create_cycle_result() {
     return CycleResult {
         proposals: create_proposal_list(),
         selection: create_selection_result(),
@@ -103,7 +103,7 @@ class RuntimeConfig {
     field max_cycles: number            # Max cycles per request
 }
 
-fun default_config() -> RuntimeConfig {
+fun default_config() {
     return RuntimeConfig {
         seed: native_time_ms(),
         enable_tracing: true,
@@ -126,7 +126,7 @@ class Runtime {
     field total_cycles: number
     field last_trace: Trace
     
-    method run_cycle(intent: Intent) -> CycleResult {
+    method run_cycle(intent: Intent) {
         var cycle_start = native_time_ms()
         var result = create_cycle_result()
         var trace = create_trace()
@@ -209,7 +209,7 @@ class Runtime {
         self.facts.set(key, value)
     }
     
-    method get_fact(key: string) -> Value {
+    method get_fact(key: string) {
         return self.facts.get(key)
     }
     
@@ -217,13 +217,13 @@ class Runtime {
         self.memory[key] = value
     }
     
-    method get_memory(key: string) -> Value {
+    method get_memory(key: string) {
         when key in self.memory => return self.memory[key]
         return value_null()
     }
 }
 
-fun create_runtime(id: IdEngine, ego: Ego, act: Act) -> Runtime {
+fun create_runtime(id: IdEngine, ego: Ego, act: Act) {
     return Runtime {
         id: id,
         ego: ego,
@@ -247,37 +247,37 @@ class RuntimeBuilder {
     field config: RuntimeConfig
     field initial_facts: map
     
-    method with_id(engine: IdEngine) -> RuntimeBuilder {
+    method with_id(engine: IdEngine) {
         self.id_engine = engine
         return self
     }
     
-    method with_ego(ego: Ego) -> RuntimeBuilder {
+    method with_ego(ego: Ego) {
         self.ego_layer = ego
         return self
     }
     
-    method with_act(act: Act) -> RuntimeBuilder {
+    method with_act(act: Act) {
         self.act_layer = act
         return self
     }
     
-    method with_config(config: RuntimeConfig) -> RuntimeBuilder {
+    method with_config(config: RuntimeConfig) {
         self.config = config
         return self
     }
     
-    method with_fact(key: string, value: Value) -> RuntimeBuilder {
+    method with_fact(key: string, value: Value) {
         self.initial_facts[key] = value
         return self
     }
     
-    method seed(seed: number) -> RuntimeBuilder {
+    method seed(seed: number) {
         self.config.seed = seed
         return self
     }
     
-    method build() -> Runtime {
+    method build() {
         var runtime = create_runtime(self.id_engine, self.ego_layer, self.act_layer)
         runtime.config = self.config
         
@@ -289,7 +289,7 @@ class RuntimeBuilder {
     }
 }
 
-fun RUNTIME() -> RuntimeBuilder {
+fun RUNTIME() {
     return RuntimeBuilder {
         id_engine: create_id_engine(),
         ego_layer: create_ego(),

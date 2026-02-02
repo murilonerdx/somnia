@@ -22,20 +22,20 @@ class ActionResult {
     field duration_ms: number       # Execution time
     field retries: number           # Number of retries attempted
     
-    method is_success() -> bool {
+    method is_success() {
         return self.status == RESULT_SUCCESS
     }
     
-    method is_error() -> bool {
+    method is_error() {
         return self.status == RESULT_ERROR
     }
     
-    method is_timeout() -> bool {
+    method is_timeout() {
         return self.status == RESULT_TIMEOUT
     }
 }
 
-fun result_success(value: Value, duration: number) -> ActionResult {
+fun result_success(value: Value, duration: number) {
     return ActionResult {
         status: RESULT_SUCCESS,
         value: value,
@@ -45,7 +45,7 @@ fun result_success(value: Value, duration: number) -> ActionResult {
     }
 }
 
-fun result_error(message: string, duration: number) -> ActionResult {
+fun result_error(message: string, duration: number) {
     return ActionResult {
         status: RESULT_ERROR,
         value: value_null(),
@@ -55,7 +55,7 @@ fun result_error(message: string, duration: number) -> ActionResult {
     }
 }
 
-fun result_timeout(duration: number) -> ActionResult {
+fun result_timeout(duration: number) {
     return ActionResult {
         status: RESULT_TIMEOUT,
         value: value_null(),
@@ -69,8 +69,8 @@ fun result_timeout(duration: number) -> ActionResult {
 # ACTION HANDLER - Function signature for actions
 # ============================================================================
 
-# Actions are functions: (args: map) -> ActionResult
-type ActionHandler = fun(args: map) -> ActionResult
+# Actions are functions: (args: map)
+type ActionHandler = fun(args: map)
 
 # ============================================================================
 # ACTION DEFINITION
@@ -84,7 +84,7 @@ class ActionDef {
     field retry_delay_ms: number
     field description: string
     
-    method execute(args: map) -> ActionResult {
+    method execute(args: map) {
         var start = native_time_ms()
         var result = null
         var attempts = 0
@@ -116,7 +116,7 @@ class ActionDef {
         return result
     }
     
-    method execute_with_timeout(args: map) -> ActionResult {
+    method execute_with_timeout(args: map) {
         var start = native_time_ms()
         
         # Call handler (timeout handled by native layer)
@@ -129,7 +129,7 @@ class ActionDef {
     }
 }
 
-fun create_action(name: string, handler: ActionHandler) -> ActionDef {
+fun create_action(name: string, handler: ActionHandler) {
     return ActionDef {
         name: name,
         handler: handler,
@@ -140,7 +140,7 @@ fun create_action(name: string, handler: ActionHandler) -> ActionDef {
     }
 }
 
-fun create_action_with_retry(name: string, handler: ActionHandler, retries: number) -> ActionDef {
+fun create_action_with_retry(name: string, handler: ActionHandler, retries: number) {
     return ActionDef {
         name: name,
         handler: handler,
@@ -156,26 +156,26 @@ fun create_action_with_retry(name: string, handler: ActionHandler, retries: numb
 # ============================================================================
 
 class ActionRegistry {
-    field actions: map              # name -> ActionDef
+    field actions: map              # name
     
     method register(action: ActionDef) {
         self.actions[action.name] = action
     }
     
-    method get(name: string) -> ActionDef {
+    method get(name: string) {
         when name in self.actions => return self.actions[name]
         return null
     }
     
-    method has(name: string) -> bool {
+    method has(name: string) {
         return name in self.actions
     }
     
-    method list() -> list {
+    method list() {
         return native_keys(self.actions)
     }
     
-    method execute(name: string, args: map) -> ActionResult {
+    method execute(name: string, args: map) {
         var action = self.get(name)
         
         when action == null {
@@ -186,7 +186,7 @@ class ActionRegistry {
     }
 }
 
-fun create_registry() -> ActionRegistry {
+fun create_registry() {
     return ActionRegistry {
         actions: {}
     }
@@ -204,14 +204,14 @@ class Act {
         self.registry.register(action)
     }
     
-    method execute(proposal: SelectedProposal) -> ActionResult {
+    method execute(proposal: SelectedProposal) {
         var action_name = proposal.proposal.action
         var args = proposal.proposal.args
         
         return self.registry.execute(action_name, args)
     }
     
-    method execute_all(proposals: list) -> list {
+    method execute_all(proposals: list) {
         var results = []
         
         for p in proposals {
@@ -223,7 +223,7 @@ class Act {
     }
 }
 
-fun create_act() -> Act {
+fun create_act() {
     return Act {
         registry: create_registry()
     }
@@ -234,7 +234,7 @@ fun create_act() -> Act {
 # ============================================================================
 
 # log(level: string, message: string)
-fun action_log(args: map) -> ActionResult {
+fun action_log(args: map) {
     var level = "INFO"
     var message = ""
     
@@ -247,7 +247,7 @@ fun action_log(args: map) -> ActionResult {
 }
 
 # sleep(ms: number)
-fun action_sleep(args: map) -> ActionResult {
+fun action_sleep(args: map) {
     var ms = 0
     when "ms" in args => ms = args["ms"].data
     
@@ -257,7 +257,7 @@ fun action_sleep(args: map) -> ActionResult {
 }
 
 # respond(status: number, body: any)
-fun action_respond(args: map) -> ActionResult {
+fun action_respond(args: map) {
     var status = 200
     var body = value_null()
     
@@ -271,7 +271,7 @@ fun action_respond(args: map) -> ActionResult {
 }
 
 # noop() - Do nothing, useful for testing
-fun action_noop(args: map) -> ActionResult {
+fun action_noop(args: map) {
     return result_success(value_null(), 0)
 }
 
@@ -290,27 +290,27 @@ fun register_builtins(act: Act) {
 class ActBlock {
     field act: Act
     
-    method action(name: string, handler: ActionHandler) -> ActBlock {
+    method action(name: string, handler: ActionHandler) {
         self.act.register(create_action(name, handler))
         return self
     }
     
-    method action_with_retry(name: string, handler: ActionHandler, retries: number) -> ActBlock {
+    method action_with_retry(name: string, handler: ActionHandler, retries: number) {
         self.act.register(create_action_with_retry(name, handler, retries))
         return self
     }
     
-    method with_builtins() -> ActBlock {
+    method with_builtins() {
         register_builtins(self.act)
         return self
     }
     
-    method build() -> Act {
+    method build() {
         return self.act
     }
 }
 
-fun ACT() -> ActBlock {
+fun ACT() {
     return ActBlock {
         act: create_act()
     }
@@ -364,7 +364,7 @@ test "ActionRegistry execute" {
 
 test "Action with retry" {
     var attempt_count = 0
-    var failing_action = fun(args: map) -> ActionResult {
+    var failing_action = fun(args: map) {
         attempt_count = attempt_count + 1
         when attempt_count < 3 {
             return result_error("Failed attempt " + native_to_string(attempt_count), 0)

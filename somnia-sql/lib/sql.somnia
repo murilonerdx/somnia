@@ -1,0 +1,97 @@
+/*
+ * Somnia SQL - Professional Database Module
+ */
+println("[LIB] Loading SQL Module...")
+
+class SqlError {
+    field code
+    field message
+    field category
+}
+
+class ResultSet {
+    field rows
+    field affected_count
+    
+    method first() {
+        if (len(self.rows) > 0) { return self.rows[0] }
+        return null
+    }
+}
+
+class Connection {
+    field native_handle
+    field in_transaction
+    
+    method query(sql, params) {
+        // Native call to execute query with parameters (Choice A - libpq)
+        return native_sql_query(self.native_handle, sql, params)
+    }
+    
+    method exec(sql, params) {
+        return native_sql_exec(self.native_handle, sql, params)
+    }
+    
+    method begin() {
+        self.exec("BEGIN", [])
+        self.in_transaction = true
+    }
+    
+    method commit() {
+        self.exec("COMMIT", [])
+        self.in_transaction = false
+    }
+    
+    method rollback() {
+        self.exec("ROLLBACK", [])
+        self.in_transaction = false
+    }
+}
+
+class ConnectionPool {
+    field dsn
+    field min_size
+    field max_size
+    field connections
+    
+    method acquire() {
+        // Simplified: always create new for now or reuse from list
+        if (len(self.connections) > 0) {
+            return pop(self.connections)
+        }
+        var handle = native_sql_connect(self.dsn)
+        return Connection { native_handle: handle, in_transaction: false }
+    }
+    
+    method release(conn) {
+        if (conn.in_transaction) {
+            conn.rollback()
+        }
+        push(self.connections, conn)
+    }
+    
+    method with_transaction(callback) {
+        var conn = self.acquire()
+        conn.begin()
+        var result = callback(conn)
+        conn.commit()
+        self.release(conn)
+        return result
+    }
+}
+
+fun create_pool(dsn, options) {
+    return ConnectionPool {
+        dsn: dsn,
+        min_size: options.min_size,
+        max_size: options.max_size,
+        connections: []
+    }
+}
+
+export {
+    create_pool,
+    Connection,
+    ConnectionPool,
+    SqlError
+}

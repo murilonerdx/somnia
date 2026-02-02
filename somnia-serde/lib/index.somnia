@@ -1,0 +1,30 @@
+/*
+ * Somnia Serde - Serialization Framework
+ */
+
+class Serializable {
+    # Convention: generated classes will implement serialize()
+    # and from_map(data: map)
+}
+
+class SerializeOptions {
+    field snake_case: bool
+    field camel_case: bool
+    field ignore_nulls: bool
+    field aliases: map
+}
+
+fun default_options() {
+    return SerializeOptions {
+        snake_case: false,
+        camel_case: false,
+        ignore_nulls: true,
+        aliases: {}
+    }
+}
+
+export {
+    Serializable,
+    SerializeOptions,
+    default_options
+}

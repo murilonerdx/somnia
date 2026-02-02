@@ -1,0 +1,22 @@
+/*
+ * Agentic Somnia Test
+ */
+
+ID {
+    drive efficiency = 0.9
+    affect focus = 0.8
+    
+    println("ID Phase Initialized")
+}
+
+EGO {
+    forbid true == false
+    budget 100
+    println("EGO Phase Initialized")
+}
+
+ACT {
+    println("ACT Phase Initialized")
+}
+
+println("Sequential logic continues...")

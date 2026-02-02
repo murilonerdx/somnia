@@ -9,16 +9,16 @@ id {
   drive accuracy     @0.5
 
   // --- Associations (Knowledge Graph) ---
-  "plus" -> "growth"       @0.5
-  "minus" -> "reduction"   @0.5
-  "five" -> "prime"        @0.2
+  "plus""growth"       @0.5
+  "minus""reduction"   @0.5
+  "five""prime"        @0.2
   
   // Logical associations (if we think of 'five' and 'plus' we might think of 'more')
-  "five" -> "calculator"   @0.1
-  "plus" -> "calculator"   @0.6
+  "five""calculator"   @0.1
+  "plus""calculator"   @0.6
   
-  "speed" -> "quick"       @0.9
-  "accuracy" -> "precise"  @0.9
+  "speed""quick"       @0.9
+  "accuracy""precise"  @0.9
 
   // --- Rules (Generative Logic) ---
   

@@ -36,7 +36,7 @@ static bool is_at_end_p(Parser* parser) {
     return parser->current >= parser->token_count || peek_token(parser).type == TOKEN_EOF;
 }
 
-static bool check(Parser* parser, TokenType type) {
+static bool check_p(Parser* parser, TokenType type) {
     if (is_at_end_p(parser)) return false;
     return peek_token(parser).type == type;
 }
@@ -47,7 +47,7 @@ static Token advance_p(Parser* parser) {
 }
 
 static bool match_p(Parser* parser, TokenType type) {
-    if (check(parser, type)) {
+    if (check_p(parser, type)) {
         advance_p(parser);
         return true;
     }
@@ -55,7 +55,7 @@ static bool match_p(Parser* parser, TokenType type) {
 }
 
 static Token consume(Parser* parser, TokenType type, const char* message) {
-    if (check(parser, type)) return advance_p(parser);
+    if (check_p(parser, type)) return advance_p(parser);
     
     Token tok = peek_token(parser);
     fprintf(stderr, "[PARSE ERROR] Line %d: %s (got '%s')\n", 
@@ -83,6 +83,9 @@ static ASTNode* parse_expression(Parser* parser);
 static ASTNode* parse_statement(Parser* parser);
 static ASTNode* parse_block(Parser* parser);
 static ASTNode* parse_function_declaration(Parser* parser);
+static ASTNode* parse_id_block(Parser* parser);
+static ASTNode* parse_ego_block(Parser* parser);
+static ASTNode* parse_act_block(Parser* parser);
 
 static ASTNode* parse_primary(Parser* parser) {
     if (match_p(parser, TOKEN_FUN)) {
@@ -109,7 +112,7 @@ static ASTNode* parse_primary(Parser* parser) {
             node->as.obj_inst.values = malloc(sizeof(ASTNode*) * MAX_FIELDS);
             node->as.obj_inst.count = 0;
             
-            if (!check(parser, TOKEN_RBRACE)) {
+            if (!check_p(parser, TOKEN_RBRACE)) {
                 do {
                     Token f_name = consume(parser, TOKEN_IDENTIFIER, "Expected field name");
                     consume(parser, TOKEN_COLON, "Expected ':' after field name");
@@ -141,7 +144,7 @@ static ASTNode* parse_primary(Parser* parser) {
         node->as.array_lit.elements = malloc(sizeof(ASTNode*) * MAX_ARRAY);
         node->as.array_lit.count = 0;
         
-        if (!check(parser, TOKEN_RBRACKET)) {
+        if (!check_p(parser, TOKEN_RBRACKET)) {
             do {
                 node->as.array_lit.elements[node->as.array_lit.count++] = parse_expression(parser);
             } while (match_p(parser, TOKEN_COMMA));
@@ -158,7 +161,7 @@ static ASTNode* parse_primary(Parser* parser) {
         node->as.map_lit.values = malloc(sizeof(ASTNode*) * MAX_FIELDS);
         node->as.map_lit.count = 0;
         
-        if (!check(parser, TOKEN_RBRACE)) {
+        if (!check_p(parser, TOKEN_RBRACE)) {
             do {
                 // Key (string or identifier)
                 char* key;
@@ -204,7 +207,7 @@ static ASTNode* parse_call(Parser* parser) {
             call->as.call.args = malloc(sizeof(ASTNode*) * MAX_ARGS);
             call->as.call.arg_count = 0;
             
-            if (!check(parser, TOKEN_RPAREN)) {
+            if (!check_p(parser, TOKEN_RPAREN)) {
                 do {
                     call->as.call.args[call->as.call.arg_count++] = parse_expression(parser);
                 } while (match_p(parser, TOKEN_COMMA));
@@ -390,6 +393,16 @@ static ASTNode* parse_function_declaration(Parser* parser); // Forward declarati
 static ASTNode* parse_var_declaration(Parser* parser) {
     Token name = consume(parser, TOKEN_IDENTIFIER, "Expected variable name");
     
+    // Skip optional type
+    if (match_p(parser, TOKEN_COLON)) {
+        if (!match_p(parser, TOKEN_IDENTIFIER) && !match_p(parser, TOKEN_ANY)) {
+            // Might be a list or map type, just consume tokens until EQ or newline
+            while (!check_p(parser, TOKEN_EQ) && !check_p(parser, TOKEN_NEWLINE) && !is_at_end_p(parser)) {
+                advance_p(parser);
+            }
+        }
+    }
+    
     ASTNode* node = create_node(AST_VAR_DECL, name.line);
     node->as.var_decl.name = strdup(name.lexeme);
     node->as.var_decl.initializer = NULL;
@@ -403,7 +416,7 @@ static ASTNode* parse_var_declaration(Parser* parser) {
 
 static ASTNode* parse_function_declaration(Parser* parser) {
     char* name_str = NULL;
-    if (check(parser, TOKEN_IDENTIFIER)) {
+    if (check_p(parser, TOKEN_IDENTIFIER)) {
         Token name = consume(parser, TOKEN_IDENTIFIER, "Expected function name");
         name_str = strdup(name.lexeme);
     }
@@ -413,20 +426,21 @@ static ASTNode* parse_function_declaration(Parser* parser) {
     node->as.fun_decl.params = malloc(sizeof(char*) * MAX_ARGS);
     node->as.fun_decl.param_count = 0;
     
+    // Parameters
     consume(parser, TOKEN_LPAREN, "Expected '(' after function name");
-    
-    if (!check(parser, TOKEN_RPAREN)) {
+    if (!check_p(parser, TOKEN_RPAREN)) {
         do {
             Token param = consume(parser, TOKEN_IDENTIFIER, "Expected parameter name");
-            node->as.fun_decl.params[node->as.fun_decl.param_count++] = strdup(param.lexeme);
-            
-            // Skip type annotation
+            // Skip optional parameter type
             if (match_p(parser, TOKEN_COLON)) {
-                consume(parser, TOKEN_IDENTIFIER, "Expected type name");
+                if (!match_p(parser, TOKEN_IDENTIFIER) && !match_p(parser, TOKEN_ANY)) {
+                    // Skip complex types
+                    while (!check_p(parser, TOKEN_COMMA) && !check_p(parser, TOKEN_RPAREN) && !is_at_end_p(parser)) advance_p(parser);
+                }
             }
+            node->as.fun_decl.params[node->as.fun_decl.param_count++] = strdup(param.lexeme);
         } while (match_p(parser, TOKEN_COMMA));
     }
-    
     consume(parser, TOKEN_RPAREN, "Expected ')' after parameters");
     
     // Skip return type
@@ -447,7 +461,7 @@ static ASTNode* parse_when_statement(Parser* parser) {
     consume(parser, TOKEN_ARROW, "Expected '=>' after when condition");
     
     // Can be single statement or block
-    if (check(parser, TOKEN_LBRACE)) {
+    if (check_p(parser, TOKEN_LBRACE)) {
         match_p(parser, TOKEN_LBRACE);
         node->as.when_stmt.body = parse_block(parser);
     } else {
@@ -505,7 +519,7 @@ static ASTNode* parse_return_statement(Parser* parser) {
     ASTNode* node = create_node(AST_RETURN, previous(parser).line);
     node->as.return_stmt.value = NULL;
     
-    if (!check(parser, TOKEN_RBRACE) && !is_at_end_p(parser)) {
+    if (!check_p(parser, TOKEN_RBRACE) && !is_at_end_p(parser)) {
         node->as.return_stmt.value = parse_expression(parser);
     }
     
@@ -517,7 +531,7 @@ static ASTNode* parse_block(Parser* parser) {
     block->as.block.statements = malloc(sizeof(ASTNode*) * MAX_STACK);
     block->as.block.stmt_count = 0;
     
-    while (!check(parser, TOKEN_RBRACE) && !is_at_end_p(parser)) {
+    while (!check_p(parser, TOKEN_RBRACE) && !is_at_end_p(parser)) {
         block->as.block.statements[block->as.block.stmt_count++] = parse_statement(parser);
     }
     
@@ -578,14 +592,14 @@ static ASTNode* parse_class_declaration(Parser* parser) {
     
     consume(parser, TOKEN_LBRACE, "Expected '{' before class body");
     
-    while (!check(parser, TOKEN_RBRACE) && !is_at_end_p(parser)) {
+    while (!check_p(parser, TOKEN_RBRACE) && !is_at_end_p(parser)) {
         if (match_p(parser, TOKEN_FIELD)) {
             Token field_name = consume(parser, TOKEN_IDENTIFIER, "Expected field name");
             node->as.class_decl.fields[node->as.class_decl.field_count++] = strdup(field_name.lexeme);
             
             // Optional type: name : type
             if (match_p(parser, TOKEN_COLON)) {
-                if (check(parser, TOKEN_IDENTIFIER)) advance_p(parser);
+                if (check_p(parser, TOKEN_IDENTIFIER)) advance_p(parser);
             }
             
             // Optional initializer
@@ -605,10 +619,13 @@ static ASTNode* parse_class_declaration(Parser* parser) {
 }
 
 static ASTNode* parse_statement(Parser* parser) {
+    if (match_p(parser, TOKEN_ID)) return parse_id_block(parser);
+    if (match_p(parser, TOKEN_EGO)) return parse_ego_block(parser);
+    if (match_p(parser, TOKEN_ACT)) return parse_act_block(parser);
     if (match_p(parser, TOKEN_IMPORT)) return parse_import_statement(parser);
     if (match_p(parser, TOKEN_EXPORT)) return parse_export_statement(parser);
     if (match_p(parser, TOKEN_CLASS)) return parse_class_declaration(parser);
-    if (match_p(parser, TOKEN_VAR)) return parse_var_declaration(parser);
+    if (match_p(parser, TOKEN_VAR) || match_p(parser, TOKEN_CONST)) return parse_var_declaration(parser);
     if (match_p(parser, TOKEN_FUN)) return parse_function_declaration(parser);
     if (match_p(parser, TOKEN_WHEN)) return parse_when_statement(parser);
     if (match_p(parser, TOKEN_FOR)) return parse_for_statement(parser);
@@ -618,6 +635,16 @@ static ASTNode* parse_statement(Parser* parser) {
     if (match_p(parser, TOKEN_BREAK)) return create_node(AST_BREAK, previous(parser).line);
     if (match_p(parser, TOKEN_CONTINUE)) return create_node(AST_CONTINUE, previous(parser).line);
     
+    if (match_p(parser, TOKEN_TRY)) {
+        consume(parser, TOKEN_LBRACE, "Expected '{' after try");
+        ASTNode* try_block = parse_block(parser);
+        consume(parser, TOKEN_CATCH, "Expected 'catch' after try block");
+        consume(parser, TOKEN_IDENTIFIER, "Expected catch variable name");
+        consume(parser, TOKEN_LBRACE, "Expected '{' after catch variable");
+        parse_block(parser); // Skip catch block
+        return try_block;
+    }
+    
     // Expression statement
     ASTNode* expr = parse_expression(parser);
     ASTNode* stmt = create_node(AST_EXPR_STMT, expr->line);
@@ -626,6 +653,86 @@ static ASTNode* parse_statement(Parser* parser) {
     stmt->as.block.stmt_count = 1;
     
     return stmt;
+}
+
+static ASTNode* parse_id_block(Parser* parser) {
+    int line = previous(parser).line;
+    consume(parser, TOKEN_LBRACE, "Expected '{' after ID");
+    
+    ASTNode* node = create_node(AST_ID_BLOCK, line);
+    node->as.agentic_block.statements = malloc(sizeof(ASTNode*) * 100);
+    node->as.agentic_block.count = 0;
+    
+    while (!check_p(parser, TOKEN_RBRACE) && !is_at_end_p(parser)) {
+        if (match_p(parser, TOKEN_DRIVE)) {
+            consume(parser, TOKEN_IDENTIFIER, "Expected identifier after 'drive'");
+            char* name = strdup(previous(parser).lexeme);
+            consume(parser, TOKEN_EQ, "Expected '=' after drive name");
+            ASTNode* val = parse_expression(parser);
+            ASTNode* decl = create_node(AST_DRIVE_DECL, previous(parser).line);
+            decl->as.cognitive_decl.name = name;
+            decl->as.cognitive_decl.value = val;
+            node->as.agentic_block.statements[node->as.agentic_block.count++] = decl;
+        } else if (match_p(parser, TOKEN_AFFECT)) {
+            consume(parser, TOKEN_IDENTIFIER, "Expected identifier after 'affect'");
+            char* name = strdup(previous(parser).lexeme);
+            consume(parser, TOKEN_EQ, "Expected '=' after affect name");
+            ASTNode* val = parse_expression(parser);
+            ASTNode* decl = create_node(AST_AFFECT_DECL, previous(parser).line);
+            decl->as.cognitive_decl.name = name;
+            decl->as.cognitive_decl.value = val;
+            node->as.agentic_block.statements[node->as.agentic_block.count++] = decl;
+        } else {
+            node->as.agentic_block.statements[node->as.agentic_block.count++] = parse_statement(parser);
+        }
+    }
+    
+    consume(parser, TOKEN_RBRACE, "Expected '}' after ID block");
+    return node;
+}
+
+static ASTNode* parse_ego_block(Parser* parser) {
+    int line = previous(parser).line;
+    consume(parser, TOKEN_LBRACE, "Expected '{' after EGO");
+    
+    ASTNode* node = create_node(AST_EGO_BLOCK, line);
+    node->as.agentic_block.statements = malloc(sizeof(ASTNode*) * 100);
+    node->as.agentic_block.count = 0;
+    
+    while (!check_p(parser, TOKEN_RBRACE) && !is_at_end_p(parser)) {
+        if (match_p(parser, TOKEN_FORBID)) {
+            ASTNode* condition = parse_expression(parser);
+            ASTNode* f_node = create_node(AST_FORBID, previous(parser).line);
+            f_node->as.rule.condition = condition;
+            node->as.agentic_block.statements[node->as.agentic_block.count++] = f_node;
+        } else if (match_p(parser, TOKEN_BUDGET)) {
+            ASTNode* limit = parse_expression(parser);
+            ASTNode* b_node = create_node(AST_BUDGET, previous(parser).line);
+            b_node->as.budget_stmt.limit = limit;
+            node->as.agentic_block.statements[node->as.agentic_block.count++] = b_node;
+        } else {
+            node->as.agentic_block.statements[node->as.agentic_block.count++] = parse_statement(parser);
+        }
+    }
+    
+    consume(parser, TOKEN_RBRACE, "Expected '}' after EGO block");
+    return node;
+}
+
+static ASTNode* parse_act_block(Parser* parser) {
+    int line = previous(parser).line;
+    consume(parser, TOKEN_LBRACE, "Expected '{' after ACT");
+    
+    ASTNode* node = create_node(AST_ACT_BLOCK, line);
+    node->as.agentic_block.statements = malloc(sizeof(ASTNode*) * 100);
+    node->as.agentic_block.count = 0;
+    
+    while (!check_p(parser, TOKEN_RBRACE) && !is_at_end_p(parser)) {
+        node->as.agentic_block.statements[node->as.agentic_block.count++] = parse_statement(parser);
+    }
+    
+    consume(parser, TOKEN_RBRACE, "Expected '}' after ACT block");
+    return node;
 }
 
 /* ============================================================================

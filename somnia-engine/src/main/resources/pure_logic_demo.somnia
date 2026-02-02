@@ -4,8 +4,8 @@ id {
     drive accuracy  @0.3 // We care less about data being fresh
 
     // Associations
-    "cache" -> "speed" @0.9
-    "api"   -> "accuracy" @0.8
+    "cache""speed" @0.9
+    "api"  "accuracy" @0.8
 
     // Decision Logic
     // If the intent is to "fetch_user", and we prefer speed, use cache

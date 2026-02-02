@@ -25,7 +25,7 @@ class SerializeConfig {
     field pretty: bool                # Pretty print output
 }
 
-fun default_serialize_config() -> SerializeConfig {
+fun default_serialize_config() {
     return SerializeConfig {
         include_nulls: false,
         include_defaults: true,
@@ -43,20 +43,20 @@ class ObjectMapper {
     field config: SerializeConfig
     
     # Serialize any value to JSON string
-    method write_value_as_string(value: any) -> string {
+    method write_value_as_string(value: any) {
         var json_val = self.to_json_value(value)
         when self.config.pretty => return json_stringify_pretty(json_val)
         return json_stringify(json_val)
     }
     
     # Parse JSON string to native value
-    method read_value(json_str: string) -> any {
+    method read_value(json_str: string) {
         var json_val = json_parse(json_str)
         return self.from_json_value(json_val)
     }
     
     # Convert native value to JsonValue
-    method to_json_value(value: any) -> JsonValue {
+    method to_json_value(value: any) {
         var t = native_type(value)
         
         when t == "string" => return json_string(value)
@@ -94,13 +94,28 @@ class ObjectMapper {
             var entries = {}
             var fields = native_get_fields(value)
             
+            # Check for metadata if available (e.g., __serde_config__)
+            var aliases = {}
+            var ignore = []
+            
             for key in native_keys(fields) {
                 var field_value = fields[key]
                 
+                # Check ignore list
+                var ignored = false
+                for ig in ignore { 
+                    when ig == key => ignored = true 
+                }
+                when ignored => continue
+                
                 when field_value == null and not self.config.include_nulls => continue
                 
+                # Alias check
                 var output_key = key
-                when self.config.snake_case => output_key = self.to_snake_case(key)
+                when key in aliases => output_key = aliases[key]
+                default => {
+                    when self.config.snake_case => output_key = self.to_snake_case(key)
+                }
                 
                 entries[output_key] = self.to_json_value(field_value)
             }
@@ -111,7 +126,7 @@ class ObjectMapper {
     }
     
     # Convert JsonValue to native value
-    method from_json_value(json_val: JsonValue) -> any {
+    method from_json_value(json_val: JsonValue) {
         when json_val.type == "string" => return json_val.data
         when json_val.type == "number" => return json_val.data
         when json_val.type == "bool" => return json_val.data
@@ -139,7 +154,7 @@ class ObjectMapper {
     }
     
     # Convert camelCase to snake_case
-    method to_snake_case(str: string) -> string {
+    method to_snake_case(str: string) {
         var result = ""
         for i in range(0, len(str)) {
             var char = string_substring(str, i, i + 1)
@@ -153,7 +168,7 @@ class ObjectMapper {
     }
     
     # Convert snake_case to camelCase
-    method from_snake_case(str: string) -> string {
+    method from_snake_case(str: string) {
         var result = ""
         var capitalize_next = false
         
@@ -174,11 +189,11 @@ class ObjectMapper {
         return result
     }
     
-    method is_upper(char: string) -> bool {
+    method is_upper(char: string) {
         return char >= "A" and char <= "Z"
     }
     
-    method to_lower(char: string) -> string {
+    method to_lower(char: string) {
         when char >= "A" and char <= "Z" => {
             var code = native_char_code(char)
             return native_from_char_code(code + 32)
@@ -186,7 +201,7 @@ class ObjectMapper {
         return char
     }
     
-    method to_upper(char: string) -> string {
+    method to_upper(char: string) {
         when char >= "a" and char <= "z" => {
             var code = native_char_code(char)
             return native_from_char_code(code - 32)
@@ -199,28 +214,28 @@ class ObjectMapper {
 # FACTORY FUNCTIONS
 # ============================================================================
 
-fun create_object_mapper() -> ObjectMapper {
+fun create_object_mapper() {
     return ObjectMapper { config: default_serialize_config() }
 }
 
-fun create_object_mapper_with_config(config: SerializeConfig) -> ObjectMapper {
+fun create_object_mapper_with_config(config: SerializeConfig) {
     return ObjectMapper { config: config }
 }
 
 # Convenience functions
-fun serialize(value: any) -> string {
+fun serialize(value: any) {
     var mapper = create_object_mapper()
     return mapper.write_value_as_string(value)
 }
 
-fun serialize_pretty(value: any) -> string {
+fun serialize_pretty(value: any) {
     var config = default_serialize_config()
     config.pretty = true
     var mapper = create_object_mapper_with_config(config)
     return mapper.write_value_as_string(value)
 }
 
-fun deserialize(json_str: string) -> any {
+fun deserialize(json_str: string) {
     var mapper = create_object_mapper()
     return mapper.read_value(json_str)
 }

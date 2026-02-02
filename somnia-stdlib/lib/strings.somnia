@@ -3,7 +3,7 @@
 # Advanced string manipulation
 # ============================================================================
 
-fun trim(str: string) -> string {
+fun trim(str: string) {
     var start = 0
     var end = len(str)
     
@@ -18,7 +18,7 @@ fun trim(str: string) -> string {
     return string_substring(str, start, end)
 }
 
-fun trim_left(str: string) -> string {
+fun trim_left(str: string) {
     var start = 0
     while start < len(str) and is_whitespace(char_at(str, start)) {
         start = start + 1
@@ -26,7 +26,7 @@ fun trim_left(str: string) -> string {
     return string_substring(str, start, len(str))
 }
 
-fun trim_right(str: string) -> string {
+fun trim_right(str: string) {
     var end = len(str)
     while end > 0 and is_whitespace(char_at(str, end - 1)) {
         end = end - 1
@@ -34,16 +34,16 @@ fun trim_right(str: string) -> string {
     return string_substring(str, 0, end)
 }
 
-fun is_whitespace(char: string) -> bool {
+fun is_whitespace(char: string) {
     return char == " " or char == "\t" or char == "\n" or char == "\r"
 }
 
-fun char_at(str: string, index: number) -> string {
+fun char_at(str: string, index: number) {
     when index < 0 or index >= len(str) => return ""
     return string_substring(str, index, index + 1)
 }
 
-fun to_upper(str: string) -> string {
+fun to_upper(str: string) {
     var result = ""
     for i in range(0, len(str)) {
         var c = char_at(str, i)
@@ -55,7 +55,7 @@ fun to_upper(str: string) -> string {
     return result
 }
 
-fun to_lower(str: string) -> string {
+fun to_lower(str: string) {
     var result = ""
     for i in range(0, len(str)) {
         var c = char_at(str, i)
@@ -67,12 +67,12 @@ fun to_lower(str: string) -> string {
     return result
 }
 
-fun capitalize(str: string) -> string {
+fun capitalize(str: string) {
     when len(str) == 0 => return ""
     return to_upper(char_at(str, 0)) + string_substring(str, 1, len(str))
 }
 
-fun title_case(str: string) -> string {
+fun title_case(str: string) {
     var words = string_split(str, " ")
     var result = []
     for word in words {
@@ -81,7 +81,7 @@ fun title_case(str: string) -> string {
     return join(result, " ")
 }
 
-fun camel_case(str: string) -> string {
+fun camel_case(str: string) {
     var words = string_split(str, "_")
     var result = to_lower(words[0])
     for i in range(1, len(words)) {
@@ -90,7 +90,7 @@ fun camel_case(str: string) -> string {
     return result
 }
 
-fun snake_case(str: string) -> string {
+fun snake_case(str: string) {
     var result = ""
     for i in range(0, len(str)) {
         var c = char_at(str, i)
@@ -103,7 +103,7 @@ fun snake_case(str: string) -> string {
     return result
 }
 
-fun kebab_case(str: string) -> string {
+fun kebab_case(str: string) {
     var result = ""
     for i in range(0, len(str)) {
         var c = char_at(str, i)
@@ -117,7 +117,7 @@ fun kebab_case(str: string) -> string {
     return result
 }
 
-fun join(items: list, separator: string) -> string {
+fun join(items: list, separator: string) {
     when len(items) == 0 => return ""
     
     var result = native_to_string(items[0])
@@ -127,7 +127,7 @@ fun join(items: list, separator: string) -> string {
     return result
 }
 
-fun repeat_string(str: string, times: number) -> string {
+fun repeat_string(str: string, times: number) {
     var result = ""
     for i in range(0, times) {
         result = result + str
@@ -135,23 +135,23 @@ fun repeat_string(str: string, times: number) -> string {
     return result
 }
 
-fun pad_left(str: string, length: number, pad_char: string) -> string {
+fun pad_left(str: string, length: number, pad_char: string) {
     when len(str) >= length => return str
     var padding = repeat_string(pad_char, length - len(str))
     return padding + str
 }
 
-fun pad_right(str: string, length: number, pad_char: string) -> string {
+fun pad_right(str: string, length: number, pad_char: string) {
     when len(str) >= length => return str
     var padding = repeat_string(pad_char, length - len(str))
     return str + padding
 }
 
-fun contains(str: string, search: string) -> bool {
+fun contains(str: string, search: string) {
     return index_of(str, search) >= 0
 }
 
-fun index_of(str: string, search: string) -> number {
+fun index_of(str: string, search: string) {
     for i in range(0, len(str) - len(search) + 1) {
         var match = true
         for j in range(0, len(search)) {
@@ -165,7 +165,7 @@ fun index_of(str: string, search: string) -> number {
     return -1
 }
 
-fun replace(str: string, search: string, replacement: string) -> string {
+fun replace(str: string, search: string, replacement: string) {
     var result = ""
     var i = 0
     
@@ -191,7 +191,7 @@ fun replace(str: string, search: string, replacement: string) -> string {
     return result
 }
 
-fun replace_all(str: string, search: string, replacement: string) -> string {
+fun replace_all(str: string, search: string, replacement: string) {
     var result = str
     var prev = ""
     while result != prev {
@@ -201,11 +201,11 @@ fun replace_all(str: string, search: string, replacement: string) -> string {
     return result
 }
 
-fun is_empty(str: string) -> bool {
+fun is_empty(str: string) {
     return len(str) == 0
 }
 
-fun is_blank(str: string) -> bool {
+fun is_blank(str: string) {
     return len(trim(str)) == 0
 }
 

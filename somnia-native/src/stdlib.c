@@ -4,6 +4,10 @@
  */
 
 #include "../include/somnia.h"
+#include <sys/time.h>
+#include <time.h>
+#include <ctype.h>
+#include <math.h>
 
 /* ============================================================================
  * NATIVE FUNCTIONS
@@ -115,6 +119,23 @@ static Value native_range(Value* args, int arg_count, Env* env) {
     return arr;
 }
 
+static Value native_get_fields(Value* args, int arg_count, Env* env) {
+    (void)env;
+    if (arg_count < 1 || args[0].type != VAL_OBJECT) return value_map();
+    
+    Object* obj = args[0].as.object;
+    Value map_val = value_map();
+    Map* m = map_val.as.map;
+    
+    // Copy fields from object's environment to a new map
+    Env* fields = obj->fields;
+    for (int i = 0; i < fields->var_count; i++) {
+        map_set(m, fields->vars[i].name, value_copy(fields->vars[i].value));
+    }
+    
+    return map_val;
+}
+
 static Value native_push(Value* args, int arg_count, Env* env) {
     (void)env;
     if (arg_count < 2 || args[0].type != VAL_ARRAY) return value_null();
@@ -163,7 +184,84 @@ static Value native_values(Value* args, int arg_count, Env* env) {
 
 static Value native_time_ms(Value* args, int arg_count, Env* env) {
     (void)args; (void)arg_count; (void)env;
-    return value_number((double)time(NULL) * 1000);
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return value_number((double)tv.tv_sec * 1000 + (double)tv.tv_usec / 1000);
+}
+
+static Value native_hash(Value* args, int arg_count, Env* env) {
+    (void)env;
+    if (arg_count < 1 || args[0].type != VAL_STRING) return value_string("0000");
+    unsigned long hash = 5381;
+    int c;
+    const char* str = args[0].as.string;
+    while ((c = *str++))
+        hash = ((hash << 5) + hash) + c;
+    char buf[32];
+    sprintf(buf, "%lx", hash);
+    return value_string(buf);
+}
+
+static Value native_parse_number(Value* args, int arg_count, Env* env) {
+    (void)env;
+    if (arg_count < 1 || args[0].type != VAL_STRING) return value_number(0);
+    return value_number(atof(args[0].as.string));
+}
+
+static Value native_parse_timestamp(Value* args, int arg_count, Env* env) {
+    (void)env;
+    if (arg_count < 1 || args[0].type != VAL_NUMBER) return value_null();
+    time_t ts = (time_t)(args[0].as.number / 1000);
+    struct tm* info = gmtime(&ts);
+    if (!info) return value_null();
+    
+    Value m = value_map();
+    map_set(m.as.map, "year", value_number(info->tm_year + 1900));
+    map_set(m.as.map, "month", value_number(info->tm_mon + 1));
+    map_set(m.as.map, "day", value_number(info->tm_mday));
+    map_set(m.as.map, "hour", value_number(info->tm_hour));
+    map_set(m.as.map, "minute", value_number(info->tm_min));
+    map_set(m.as.map, "second", value_number(info->tm_sec));
+    return m;
+}
+
+static Value native_fs_read(Value* args, int arg_count, Env* env) {
+    (void)env;
+    if (arg_count < 1 || args[0].type != VAL_STRING) return value_null();
+    
+    FILE* file = fopen(args[0].as.string, "rb");
+    if (!file) return value_null();
+    
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    
+    char* buffer = malloc(size + 1);
+    if (!buffer) {
+        fclose(file);
+        return value_null();
+    }
+    
+    fread(buffer, 1, size, file);
+    buffer[size] = '\0';
+    fclose(file);
+    
+    Value v = value_string(buffer);
+    free(buffer);
+    return v;
+}
+
+static Value native_fs_write(Value* args, int arg_count, Env* env) {
+    (void)env;
+    if (arg_count < 2 || args[0].type != VAL_STRING || args[1].type != VAL_STRING) return value_bool(false);
+    
+    FILE* file = fopen(args[0].as.string, "wb");
+    if (!file) return value_bool(false);
+    
+    size_t written = fwrite(args[1].as.string, 1, strlen(args[1].as.string), file);
+    fclose(file);
+    
+    return value_bool(written == strlen(args[1].as.string));
 }
 
 static Value native_input(Value* args, int arg_count, Env* env) {
@@ -319,6 +417,13 @@ static Value native_uptime(Value* args, int arg_count, Env* env) {
     return value_number((double)(time(NULL) - start_time));
 }
 
+static Value native_gc(Value* args, int arg_count, Env* env) {
+    (void)args; (void)arg_count;
+    // Trigger Mark-and-Sweep
+    gc_collect(env);
+    return value_null();
+}
+
 /* ============================================================================
  * REGISTER STDLIB
  * ============================================================================ */
@@ -349,6 +454,7 @@ void stdlib_register(Env* env) {
     register_native(env, "pop", native_pop);
     register_native(env, "native_keys", native_keys);
     register_native(env, "native_values", native_values);
+    register_native(env, "native_get_fields", native_get_fields);
     
     // Strings
     register_native(env, "split", native_split);
@@ -365,6 +471,12 @@ void stdlib_register(Env* env) {
     // System
     register_native(env, "native_time_ms", native_time_ms);
     register_native(env, "native_uptime", native_uptime);
+    register_native(env, "native_hash", native_hash);
+    register_native(env, "native_parse_number", native_parse_number);
+    register_native(env, "native_parse_timestamp", native_parse_timestamp);
+    register_native(env, "native_fs_read", native_fs_read);
+    register_native(env, "native_fs_write", native_fs_write);
+    register_native(env, "gc", native_gc);
 
     // Network
     register_native(env, "native_net_listen", native_net_listen);
@@ -372,6 +484,11 @@ void stdlib_register(Env* env) {
     register_native(env, "native_net_read", native_net_read);
     register_native(env, "native_net_write", native_net_write);
     register_native(env, "native_net_close", native_net_close);
+    
+    // SQL
+    register_native(env, "native_sql_connect", native_sql_connect);
+    register_native(env, "native_sql_query", native_sql_query);
+    register_native(env, "native_sql_exec", native_sql_exec);
     
     // Initialize random seed
     srand((unsigned int)time(NULL));

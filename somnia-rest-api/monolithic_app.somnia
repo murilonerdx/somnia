@@ -1,0 +1,133 @@
+/*
+ * Somnia Monolithic Professional Demo (v2.0)
+ * Bundled version for verification
+ */
+
+import { json_parse } from "somnia-json/lib/json"
+import { parse_http_request } from "somnia-boot/lib/parser"
+import { Response } from "somnia-boot/lib/http"
+import { create_object_mapper, serialize, deserialize } from "somnia-json/lib/serialization"
+
+# --- Web Framework ---
+class Context {
+    field req
+    field res
+    field body
+    field params
+}
+
+class WebApp {
+    field routes
+    field middlewares
+    
+    fun use(middleware) {
+        if (self.middlewares == null) { self.middlewares = [] }
+        push(self.middlewares, middleware)
+    }
+    
+    fun post(path, handler) { self.add_route("POST", path, handler) }
+    fun get(path, handler) { self.add_route("GET", path, handler) }
+    
+    method add_route(verb, path, handler) {
+        if (self.routes == null) { self.routes = {} }
+        var key = verb + ":" + path
+        self.routes[key] = handler
+    }
+    
+    method listen(port) {
+        var server_fd = native_net_listen(port)
+        if (server_fd < 0) { return }
+        println("[BOOT] UserService Online on port " + port)
+        
+        while (true) {
+            var client_fd = native_net_accept(server_fd)
+            if (client_fd >= 0) {
+                self.handle_client(client_fd)
+                native_net_close(client_fd)
+            }
+        }
+    }
+    
+    method handle_client(client_fd) {
+        var raw = native_net_read(client_fd)
+        var request = parse_http_request(raw)
+        if (request == null) { return }
+        
+        var ctx = Context {
+            req: request,
+            res: Response { status: 200, headers: {}, body: "" },
+            body: null,
+            params: {}
+        }
+        
+        if (request.headers["Content-Type"] == "application/json") {
+            ctx.body = deserialize(request.body)
+        }
+        
+        var key = request.verb + ":" + request.path
+        var handler = self.routes[key]
+        
+        if (handler != null) {
+            for m in self.middlewares { m(ctx) }
+            handler(ctx)
+        } else {
+            ctx.res.status = 404
+            ctx.res.body = "Not Found"
+        }
+        
+        ctx.res.send(client_fd)
+    }
+}
+
+# --- Validation ---
+class ValidationError {
+    field field_name
+    field message
+}
+
+class Validator {
+    method validate(obj, constraints) {
+        var errors = []
+        for field in native_keys(constraints) {
+            var val = obj[field]
+            var rules = constraints[field]
+            for rule in rules {
+                var err = rule(val, field)
+                if (err != null) { push(errors, err) }
+            }
+        }
+        return { is_valid: len(errors) == 0, errors: errors }
+    }
+}
+
+fun not_null() { return fun(v, n) { if (v == null) { return ValidationError { field_name: n, message: "Required" } } return null } }
+fun min_size(m) { return fun(v, n) { if (len(v) < m) { return ValidationError { field_name: n, message: "Too short" } } return null } }
+
+# --- App ---
+var app = WebApp { routes: {}, middlewares: [] }
+var validator = Validator {}
+
+app.use(fun(ctx) {
+    println("[LOG] " + ctx.req.verb + " " + ctx.req.path)
+})
+
+app.post("/api/users", fun(ctx) {
+    var constraints = {
+        username: [not_null(), min_size(3)]
+    }
+    var res = validator.validate(ctx.body, constraints)
+    
+    if (not res.is_valid) {
+        ctx.res.status = 400
+        ctx.res.json({ error: "Validation Failed", details: res.errors })
+        return
+    }
+    
+    ctx.res.json({ status: "success", username: ctx.body.username })
+})
+
+app.get("/api/health", fun(ctx) {
+    ctx.res.json({ status: "UP", runtime: "Somnia Hardened" })
+})
+
+app.listen(8090)

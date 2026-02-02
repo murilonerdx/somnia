@@ -8,49 +8,43 @@
 # ============================================================================
 
 class JsonValue {
-    field type: string     # "string", "number", "bool", "null", "array", "object"
-    field data: any
+    method is_null() { return self.type == "null" }
+    method is_array() { return self.type == "array" }
+    method is_object() { return self.type == "object" }
     
-    method is_string() -> bool { return self.type == "string" }
-    method is_number() -> bool { return self.type == "number" }
-    method is_bool() -> bool { return self.type == "bool" }
-    method is_null() -> bool { return self.type == "null" }
-    method is_array() -> bool { return self.type == "array" }
-    method is_object() -> bool { return self.type == "object" }
-    
-    method as_string() -> string {
+    method as_string() {
         when self.type == "string" => return self.data
         return ""
     }
     
-    method as_number() -> number {
+    method as_number() {
         when self.type == "number" => return self.data
         return 0
     }
     
-    method as_bool() -> bool {
+    method as_bool() {
         when self.type == "bool" => return self.data
         return false
     }
     
-    method as_array() -> list {
+    method as_array() {
         when self.type == "array" => return self.data
         return []
     }
     
-    method as_object() -> map {
+    method as_object() {
         when self.type == "object" => return self.data
         return {}
     }
     
-    method get(key: string) -> JsonValue {
+    method get(key: string) {
         when self.type == "object" => {
             when key in self.data => return self.data[key]
         }
         return json_null()
     }
     
-    method at(index: number) -> JsonValue {
+    method at(index: number) {
         when self.type == "array" => {
             when index >= 0 and index < len(self.data) => return self.data[index]
         }
@@ -59,27 +53,27 @@ class JsonValue {
 }
 
 # Factory functions for JsonValue
-fun json_string(value: string) -> JsonValue {
+fun json_string(value: string) {
     return JsonValue { type: "string", data: value }
 }
 
-fun json_number(value: number) -> JsonValue {
+fun json_number(value: number) {
     return JsonValue { type: "number", data: value }
 }
 
-fun json_bool(value: bool) -> JsonValue {
+fun json_bool(value: bool) {
     return JsonValue { type: "bool", data: value }
 }
 
-fun json_null() -> JsonValue {
+fun json_null() {
     return JsonValue { type: "null", data: null }
 }
 
-fun json_array(items: list) -> JsonValue {
+fun json_array(items: list) {
     return JsonValue { type: "array", data: items }
 }
 
-fun json_object(entries: map) -> JsonValue {
+fun json_object(entries: map) {
     return JsonValue { type: "object", data: entries }
 }
 
@@ -93,12 +87,12 @@ class JsonParser {
     field line: number
     field column: number
     
-    method parse() -> JsonValue {
+    method parse() {
         self.skip_whitespace()
         return self.parse_value()
     }
     
-    method parse_value() -> JsonValue {
+    method parse_value() {
         self.skip_whitespace()
         var char = self.peek()
         
@@ -114,7 +108,7 @@ class JsonParser {
         return json_null()
     }
     
-    method parse_string() -> JsonValue {
+    method parse_string() {
         self.expect("\"")
         var result = ""
         
@@ -153,7 +147,7 @@ class JsonParser {
         return json_string(result)
     }
     
-    method parse_number() -> JsonValue {
+    method parse_number() {
         var start = self.position
         
         # Negative sign
@@ -191,7 +185,7 @@ class JsonParser {
         return json_number(value)
     }
     
-    method parse_object() -> JsonValue {
+    method parse_object() {
         self.expect("{")
         self.skip_whitespace()
         
@@ -215,7 +209,7 @@ class JsonParser {
         return json_object(entries)
     }
     
-    method parse_object_entry() -> map {
+    method parse_object_entry() {
         self.skip_whitespace()
         var key_value = self.parse_string()
         var key = key_value.as_string()
@@ -230,7 +224,7 @@ class JsonParser {
         return { "key": key, "value": value }
     }
     
-    method parse_array() -> JsonValue {
+    method parse_array() {
         self.expect("[")
         self.skip_whitespace()
         
@@ -254,23 +248,23 @@ class JsonParser {
         return json_array(items)
     }
     
-    method parse_true() -> JsonValue {
+    method parse_true() {
         self.expect_word("true")
         return json_bool(true)
     }
     
-    method parse_false() -> JsonValue {
+    method parse_false() {
         self.expect_word("false")
         return json_bool(false)
     }
     
-    method parse_null() -> JsonValue {
+    method parse_null() {
         self.expect_word("null")
         return json_null()
     }
     
     # Helper methods
-    method peek() -> string {
+    method peek() {
         when self.position >= len(self.input) => return ""
         return string_substring(self.input, self.position, self.position + 1)
     }
@@ -308,7 +302,7 @@ class JsonParser {
         }
     }
     
-    method is_digit(char: string) -> bool {
+    method is_digit(char: string) {
         return char >= "0" and char <= "9"
     }
 }
@@ -322,11 +316,11 @@ class JsonSerializer {
     field indent_size: number
     field current_indent: number
     
-    method serialize(value: JsonValue) -> string {
+    method serialize(value: JsonValue) {
         return self.serialize_value(value)
     }
     
-    method serialize_value(value: JsonValue) -> string {
+    method serialize_value(value: JsonValue) {
         when value.type == "string" => return self.serialize_string(value.data)
         when value.type == "number" => return self.serialize_number(value.data)
         when value.type == "bool" => return if value.data then "true" else "false"
@@ -336,7 +330,7 @@ class JsonSerializer {
         return "null"
     }
     
-    method serialize_string(value: string) -> string {
+    method serialize_string(value: string) {
         var result = "\""
         
         for i in range(0, len(value)) {
@@ -353,11 +347,11 @@ class JsonSerializer {
         return result + "\""
     }
     
-    method serialize_number(value: number) -> string {
+    method serialize_number(value: number) {
         return native_to_string(value)
     }
     
-    method serialize_array(items: list) -> string {
+    method serialize_array(items: list) {
         when len(items) == 0 => return "[]"
         
         var result = "["
@@ -387,7 +381,7 @@ class JsonSerializer {
         return result + "]"
     }
     
-    method serialize_object(entries: map) -> string {
+    method serialize_object(entries: map) {
         var keys = native_keys(entries)
         when len(keys) == 0 => return "{}"
         
@@ -420,7 +414,7 @@ class JsonSerializer {
         return result + "}"
     }
     
-    method get_indent() -> string {
+    method get_indent() {
         var result = ""
         for i in range(0, self.current_indent * self.indent_size) {
             result = result + " "
@@ -433,7 +427,7 @@ class JsonSerializer {
 # PUBLIC API
 # ============================================================================
 
-fun json_parse(input: string) -> JsonValue {
+fun json_parse(input: string) {
     var parser = JsonParser { 
         input: input, 
         position: 0, 
@@ -443,7 +437,7 @@ fun json_parse(input: string) -> JsonValue {
     return parser.parse()
 }
 
-fun json_stringify(value: JsonValue) -> string {
+fun json_stringify(value: JsonValue) {
     var serializer = JsonSerializer { 
         indent: false, 
         indent_size: 2, 
@@ -452,7 +446,7 @@ fun json_stringify(value: JsonValue) -> string {
     return serializer.serialize(value)
 }
 
-fun json_stringify_pretty(value: JsonValue) -> string {
+fun json_stringify_pretty(value: JsonValue) {
     var serializer = JsonSerializer { 
         indent: true, 
         indent_size: 2, 
@@ -462,7 +456,7 @@ fun json_stringify_pretty(value: JsonValue) -> string {
 }
 
 # Convenience function to convert any value to JsonValue
-fun to_json(value: any) -> JsonValue {
+fun to_json(value: any) {
     var t = native_type(value)
     
     when t == "string" => return json_string(value)
@@ -488,7 +482,7 @@ fun to_json(value: any) -> JsonValue {
 }
 
 # Convert JsonValue to native value
-fun from_json(value: JsonValue) -> any {
+fun from_json(value: JsonValue) {
     when value.type == "string" => return value.data
     when value.type == "number" => return value.data
     when value.type == "bool" => return value.data

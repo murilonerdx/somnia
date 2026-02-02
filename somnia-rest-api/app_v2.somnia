@@ -1,0 +1,56 @@
+/*
+ * Somnia Professional Ecosystem Demo (v2.0)
+ */
+
+import { bootstrap_app } from "somnia-boot-starter/lib/starter"
+import { Validator, not_null, min_size, email } from "somnia-validation/lib/validation"
+import { serialize } from "somnia-json/lib/serialization"
+
+# Initialize
+var sys = bootstrap_app("UserService", 8090)
+var app = sys.app
+var logger = sys.logger
+var validator = Validator {}
+
+# DTO Validation Rules
+fun get_user_constraints() {
+    return {
+        username: [not_null(), min_size(3)],
+        email: [not_null(), email()]
+    }
+}
+
+# Controllers (Express/Koa style for now)
+app.post("/api/users", fun(ctx) {
+    var body = ctx.body
+    
+    # 1. Validation
+    var result = validator.validate(body, get_user_constraints())
+    if (not result.is_valid()) {
+        ctx.res.status = 400
+        ctx.res.json({ error: "Validation Failed", details: result.errors })
+        return
+    }
+    
+    # 2. Business Logic
+    logger.info("User created successfully", { user: body.username })
+    
+    # 3. Response
+    ctx.res.json({
+        id: "usr_" + native_hash(body.username),
+        status: "created",
+        timestamp: native_time_ms()
+    })
+})
+
+app.get("/api/health", fun(ctx) {
+    ctx.res.json({
+        status: "UP",
+        uptime: native_uptime(),
+        memory: "Optimal (GC Active)"
+    })
+})
+
+# Start
+logger.info("UserService listening on port 8090")
+app.listen(8090)

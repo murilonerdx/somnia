@@ -8,7 +8,7 @@ import { schema, required, min_length, is_email } from "../../somnia-stdlib/lib/
 # USER SCHEMA VALIDATION
 # ============================================================================
 
-fun user_create_schema() -> Schema {
+fun user_create_schema() {
     return schema()
         .field("name", "string").required().min(2).max(100).add()
         .field("email", "string").required().email().add()
@@ -16,7 +16,7 @@ fun user_create_schema() -> Schema {
         .field("role", "string").add()
 }
 
-fun user_update_schema() -> Schema {
+fun user_update_schema() {
     return schema()
         .field("name", "string").min(2).max(100).add()
         .field("email", "string").email().add()
@@ -37,7 +37,7 @@ class User {
     field created_at: number
     field updated_at: number
     
-    method to_json() -> map {
+    method to_json() {
         return {
             "id": self.id,
             "name": self.name,
@@ -49,7 +49,7 @@ class User {
         }
     }
     
-    method to_safe_json() -> map {
+    method to_safe_json() {
         # Exclude password
         return {
             "id": self.id,
@@ -61,7 +61,7 @@ class User {
     }
 }
 
-fun user_from_map(data: map) -> User {
+fun user_from_map(data: map) {
     return User {
         id: data["id"],
         name: data["name"],

@@ -1,0 +1,92 @@
+/*
+ * Somnia Web - Professional REST Framework
+ */
+println("[DEBUG] Loading Web Framework...")
+
+import { parse_http_request } from "somnia-boot/lib/parser"
+import { Response } from "somnia-boot/lib/http"
+import { deserialize } from "somnia-json/lib/serialization"
+
+class Context {
+    field req
+    field res
+    field body
+    field params
+}
+
+class WebApp {
+    field routes
+    field middlewares
+    
+    fun use(middleware) {
+        push(self.middlewares, middleware)
+    }
+    
+    fun get(path, handler) { self.add_route("GET", path, handler) }
+    fun post(path, handler) { self.add_route("POST", path, handler) }
+    
+    method add_route(verb, path, handler) {
+        if (self.routes == null) { self.routes = {} }
+        var key = verb + ":" + path
+        self.routes[key] = handler
+    }
+    
+    method listen(port) {
+        var server_fd = native_net_listen(port)
+        if (server_fd < 0) { return }
+        
+        while (true) {
+            var client_fd = native_net_accept(server_fd)
+            if (client_fd >= 0) {
+                self.handle_client(client_fd)
+                native_net_close(client_fd)
+            }
+        }
+    }
+    
+    method handle_client(client_fd) {
+        var raw = native_net_read(client_fd)
+        var request = parse_http_request(raw)
+        if (request == null) { return }
+        
+        var ctx = Context {
+            req: request,
+            res: Response { status: 200, headers: {}, body: "" },
+            body: null,
+            params: {}
+        }
+        
+        # Auto-parse JSON body
+        if (request.headers["Content-Type"] == "application/json") {
+            ctx.body = deserialize(request.body)
+        }
+        
+        var handler = self.routes[request.verb + ":" + request.path]
+        if (handler != null) {
+            # Execute Middleware Chain
+            self.execute_chain(ctx, handler)
+        } else {
+            ctx.res.status = 404
+            ctx.res.body = "Not Found"
+        }
+        
+        ctx.res.send(client_fd)
+    }
+    
+    method execute_chain(ctx, handler) {
+        # Simplified: just run middlewares then handler
+        for m in self.middlewares {
+            m(ctx)
+        }
+        handler(ctx)
+    }
+}
+
+fun create_app() {
+    return WebApp { routes: {}, middlewares: [] }
+}
+
+export {
+    WebApp,
+    create_app
+}
