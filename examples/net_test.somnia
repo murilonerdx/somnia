@@ -1,0 +1,8 @@
+
+var fd = native_net_listen(8080)
+if (fd >= 0) {
+    println("[Test] Success: Listening on FD " + native_to_string(fd))
+    native_net_close(fd)
+} else {
+    println("[Test] Failed: native_net_listen returned " + native_to_string(fd))
+}

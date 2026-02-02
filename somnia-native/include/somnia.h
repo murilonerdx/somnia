@@ -135,8 +135,14 @@ typedef enum {
     VAL_MAP,
     VAL_FUNCTION,
     VAL_NATIVE_FN,
-    VAL_OBJECT
+    VAL_OBJECT,
+    VAL_BLOB
 } ValueType;
+
+typedef struct {
+    uint8_t* data;
+    size_t size;
+} Blob;
 
 /* Forward declarations */
 struct Value;
@@ -180,6 +186,7 @@ typedef struct Value {
         struct Function* function;
         struct Value (*native_fn)(struct Value* args, int arg_count, struct Env* env);
         struct Object* object;
+        Blob* blob;
     } as;
 } Value;
 
@@ -526,6 +533,9 @@ typedef struct {
     
     // Cognitive State
     Env* cognitive_state;
+    
+    // VFS
+    Map* vfs;              // Virtual File System (Path -> Source)
     
     // GC Roots (Shadow Stack)
     Value temp_stack[MAX_TEMP_STACK];

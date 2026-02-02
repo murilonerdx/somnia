@@ -1,0 +1,67 @@
+/*
+ * Somnia Packager - tools/pack.somnia
+ */
+
+fun list_files(path, base) {
+    var results = []
+    var items = native_fs_list(path)
+    
+    for item in items {
+        if (item == ".git" || item == "bin" || item == "somnia-vm" || item == "somnia-native") {
+            continue
+        }
+        
+        var full_path = path + "/" + item
+        var rel_path = item
+        if (base != "") {
+             rel_path = base + "/" + item
+        }
+        
+        if (native_fs_is_dir(full_path)) {
+            var sub = list_files(full_path, rel_path)
+            for s in sub {
+                push(results, s)
+            }
+        } else {
+            push(results, rel_path)
+        }
+    }
+    return results
+}
+
+fun pack_project(dir, entry_point, output_file) {
+    println("Packing project in " + dir + "...")
+    var files = list_files(dir, "")
+    
+    var blob = native_blob_create()
+    
+    # Header
+    native_blob_append_string(blob, "SOMNIA")
+    native_blob_append_u16(blob, 0) # Null terminator for header type if needed
+    
+    # Entry Point
+    native_blob_append_u16(blob, len(entry_point))
+    native_blob_append_string(blob, entry_point)
+    
+    # File Count
+    native_blob_append_u32(blob, len(files))
+    
+    for f in files {
+        println("  Adding " + f + "...")
+        var content = native_fs_read(dir + "/" + f)
+        
+        native_blob_append_u16(blob, len(f))
+        native_blob_append_string(blob, f)
+        
+        native_blob_append_u32(blob, len(content))
+        native_blob_append_string(blob, content)
+    }
+    
+    native_fs_write_blob(output_file, blob)
+    println("Successfully created binary bundle: " + output_file)
+}
+
+# Entry point for the tool
+# Usage: somnia run pack.somnia <dir> <entry> <output>
+# For now, we manually set or use prompt
+pack_project(".", "examples/pro_agent_db.somnia", "pro_agent.som")

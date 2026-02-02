@@ -4,10 +4,18 @@
  */
 
 #include "../include/somnia.h"
+
+#ifndef SOMNIA_NO_SQL
 #include <libpq-fe.h>
+#endif
 
 /* native_sql_connect(dsn: string) -> handle: number */
 Value native_sql_connect(Value* args, int arg_count, Env* env) {
+#ifdef SOMNIA_NO_SQL
+    (void)args; (void)arg_count; (void)env;
+    fprintf(stderr, "[SQL ERROR] SQL support not available in this build.\n");
+    return value_null();
+#else
     if (arg_count < 1 || args[0].type != VAL_STRING) {
         return value_number(-1);
     }
@@ -20,12 +28,16 @@ Value native_sql_connect(Value* args, int arg_count, Env* env) {
     }
     
     // We store the pointer as a number for now (hacky, but works for bridge)
-    // Professional way: VAL_NATIVE_OBJECT
     return value_number((uintptr_t)conn);
+#endif
 }
 
 /* native_sql_query(handle: number, sql: string, params: array) -> ResultSet */
 Value native_sql_query(Value* args, int arg_count, Env* env) {
+#ifdef SOMNIA_NO_SQL
+    (void)args; (void)arg_count; (void)env;
+    return value_null();
+#else
     if (arg_count < 3 || args[0].type != VAL_NUMBER || args[1].type != VAL_STRING) {
         return value_null();
     }
@@ -70,15 +82,20 @@ Value native_sql_query(Value* args, int arg_count, Env* env) {
     
     PQclear(res);
     
-    Value result_obj = value_map(); // We should return a Map that looks like ResultSet
+    Value result_obj = value_map();
     map_set(result_obj.as.map, "rows", s_array);
     map_set(result_obj.as.map, "affected_count", value_number(rows));
     
     return result_obj;
+#endif
 }
 
 /* native_sql_exec(handle: number, sql: string, params: array) -> number */
 Value native_sql_exec(Value* args, int arg_count, Env* env) {
+#ifdef SOMNIA_NO_SQL
+    (void)args; (void)arg_count; (void)env;
+    return value_null();
+#else
     if (arg_count < 3 || args[0].type != VAL_NUMBER || args[1].type != VAL_STRING) {
         return value_number(-1);
     }
@@ -109,4 +126,5 @@ Value native_sql_exec(Value* args, int arg_count, Env* env) {
     int affected = atoi(PQcmdTuples(res));
     PQclear(res);
     return value_number(affected);
+#endif
 }

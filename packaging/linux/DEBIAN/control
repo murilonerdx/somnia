@@ -1,0 +1,10 @@
+Package: somnia
+Version: 2.0.0
+Section: devel
+Priority: optional
+Architecture: amd64
+Depends: libpq5, libc6 (>= 2.34)
+Maintainer: Somnia Team <team@somnia.lang>
+Description: Somnia Programming Language
+ The professional, agentic interpretation runtime.
+ Includes native SQL support, validation, and serialization modules.

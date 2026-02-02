@@ -6,6 +6,9 @@
 #include "../include/somnia.h"
 #include <sys/time.h>
 #include <time.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <ctype.h>
 #include <math.h>
 
@@ -283,6 +286,122 @@ static Value native_input(Value* args, int arg_count, Env* env) {
     return value_string("");
 }
 
+static Value native_fs_read_blob(Value* args, int arg_count, Env* env) {
+    (void)env;
+    if (arg_count < 1 || args[0].type != VAL_STRING) return value_null();
+    
+    FILE* file = fopen(args[0].as.string, "rb");
+    if (!file) return value_null();
+    
+    fseek(file, 0, SEEK_END);
+    size_t size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    
+    Blob* blob = malloc(sizeof(Blob));
+    blob->data = malloc(size);
+    blob->size = size;
+    fread(blob->data, 1, size, file);
+    fclose(file);
+    
+    Value v;
+    v.type = VAL_BLOB;
+    v.as.blob = blob;
+    return v;
+}
+
+static Value native_blob_create(Value* args, int arg_count, Env* env) {
+    (void)env; (void)args; (void)arg_count;
+    Blob* blob = malloc(sizeof(Blob));
+    blob->data = NULL;
+    blob->size = 0;
+    
+    Value v;
+    v.type = VAL_BLOB;
+    v.as.blob = blob;
+    return v;
+}
+
+static Value native_blob_append_string(Value* args, int arg_count, Env* env) {
+    (void)env;
+    if (arg_count < 2 || args[0].type != VAL_BLOB || args[1].type != VAL_STRING) return value_null();
+    
+    Blob* blob = args[0].as.blob;
+    const char* str = args[1].as.string;
+    size_t len = strlen(str);
+    
+    blob->data = realloc(blob->data, blob->size + len);
+    memcpy(blob->data + blob->size, str, len);
+    blob->size += len;
+    
+    return args[0];
+}
+
+static Value native_blob_append_u16(Value* args, int arg_count, Env* env) {
+    (void)env;
+    if (arg_count < 2 || args[0].type != VAL_BLOB || args[1].type != VAL_NUMBER) return value_null();
+    
+    Blob* blob = args[0].as.blob;
+    uint16_t val = (uint16_t)args[1].as.number;
+    
+    blob->data = realloc(blob->data, blob->size + 2);
+    memcpy(blob->data + blob->size, &val, 2);
+    blob->size += 2;
+    
+    return args[0];
+}
+
+static Value native_blob_append_u32(Value* args, int arg_count, Env* env) {
+    (void)env;
+    if (arg_count < 2 || args[0].type != VAL_BLOB || args[1].type != VAL_NUMBER) return value_null();
+    
+    Blob* blob = args[0].as.blob;
+    uint32_t val = (uint32_t)args[1].as.number;
+    
+    blob->data = realloc(blob->data, blob->size + 4);
+    memcpy(blob->data + blob->size, &val, 4);
+    blob->size += 4;
+    
+    return args[0];
+}
+static Value native_fs_write_blob(Value* args, int arg_count, Env* env) {
+    (void)env;
+    if (arg_count < 2 || args[0].type != VAL_STRING || args[1].type != VAL_BLOB) return value_bool(false);
+    
+    FILE* file = fopen(args[0].as.string, "wb");
+    if (!file) return value_bool(false);
+    
+    size_t written = fwrite(args[1].as.blob->data, 1, args[1].as.blob->size, file);
+    fclose(file);
+    
+    return value_bool(written == args[1].as.blob->size);
+}
+
+static Value native_fs_list(Value* args, int arg_count, Env* env) {
+    (void)env;
+    if (arg_count < 1 || args[0].type != VAL_STRING) return value_array();
+    
+    DIR* dir = opendir(args[0].as.string);
+    if (!dir) return value_array();
+    
+    Value arr = value_array();
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+        array_push(arr.as.array, value_string(entry->d_name));
+    }
+    closedir(dir);
+    return arr;
+}
+
+static Value native_fs_is_dir(Value* args, int arg_count, Env* env) {
+    (void)env;
+    if (arg_count < 1 || args[0].type != VAL_STRING) return value_bool(false);
+    
+    struct stat st;
+    if (stat(args[0].as.string, &st) != 0) return value_bool(false);
+    return value_bool(S_ISDIR(st.st_mode));
+}
+
 static Value native_split(Value* args, int arg_count, Env* env) {
     (void)env;
     if (arg_count < 2 || args[0].type != VAL_STRING || args[1].type != VAL_STRING) {
@@ -295,7 +414,6 @@ static Value native_split(Value* args, int arg_count, Env* env) {
     int delim_len = strlen(delim);
     
     if (delim_len == 0) {
-        // Fallback or handle appropriately
         array_push(arr.as.array, value_copy(args[0]));
         return arr;
     }
@@ -476,6 +594,14 @@ void stdlib_register(Env* env) {
     register_native(env, "native_parse_timestamp", native_parse_timestamp);
     register_native(env, "native_fs_read", native_fs_read);
     register_native(env, "native_fs_write", native_fs_write);
+    register_native(env, "native_fs_read_blob", native_fs_read_blob);
+    register_native(env, "native_fs_write_blob", native_fs_write_blob);
+    register_native(env, "native_blob_create", native_blob_create);
+    register_native(env, "native_blob_append_string", native_blob_append_string);
+    register_native(env, "native_blob_append_u16", native_blob_append_u16);
+    register_native(env, "native_blob_append_u32", native_blob_append_u32);
+    register_native(env, "native_fs_list", native_fs_list);
+    register_native(env, "native_fs_is_dir", native_fs_is_dir);
     register_native(env, "gc", native_gc);
 
     // Network

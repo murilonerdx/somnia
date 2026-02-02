@@ -101,31 +101,34 @@ static ASTNode* parse_primary(Parser* parser) {
         return node;
     }
     
-    // Identifier or Class Instantiation
+    // Object Instantiation: new ClassName { field: val }
+    if (match_p(parser, TOKEN_NEW)) {
+        Token name = consume(parser, TOKEN_IDENTIFIER, "Expected class name after 'new'");
+        consume(parser, TOKEN_LBRACE, "Expected '{' after class name");
+        
+        ASTNode* node = create_node(AST_OBJECT, name.line);
+        node->as.obj_inst.class_name = strdup(name.lexeme);
+        node->as.obj_inst.fields = malloc(sizeof(char*) * MAX_FIELDS);
+        node->as.obj_inst.values = malloc(sizeof(ASTNode*) * MAX_FIELDS);
+        node->as.obj_inst.count = 0;
+        
+        if (!check_p(parser, TOKEN_RBRACE)) {
+            do {
+                Token f_name = consume(parser, TOKEN_IDENTIFIER, "Expected field name");
+                consume(parser, TOKEN_COLON, "Expected ':' after field name");
+                ASTNode* f_val = parse_expression(parser);
+                node->as.obj_inst.fields[node->as.obj_inst.count] = strdup(f_name.lexeme);
+                node->as.obj_inst.values[node->as.obj_inst.count] = f_val;
+                node->as.obj_inst.count++;
+            } while (match_p(parser, TOKEN_COMMA));
+        }
+        consume(parser, TOKEN_RBRACE, "Expected '}' after instantiation fields");
+        return node;
+    }
+    
+    // Identifier
     if (match_p(parser, TOKEN_IDENTIFIER)) {
         Token name = previous(parser);
-        if (match_p(parser, TOKEN_LBRACE)) {
-            // Instantiation: ClassName { field: val }
-            ASTNode* node = create_node(AST_OBJECT, name.line);
-            node->as.obj_inst.class_name = strdup(name.lexeme);
-            node->as.obj_inst.fields = malloc(sizeof(char*) * MAX_FIELDS);
-            node->as.obj_inst.values = malloc(sizeof(ASTNode*) * MAX_FIELDS);
-            node->as.obj_inst.count = 0;
-            
-            if (!check_p(parser, TOKEN_RBRACE)) {
-                do {
-                    Token f_name = consume(parser, TOKEN_IDENTIFIER, "Expected field name");
-                    consume(parser, TOKEN_COLON, "Expected ':' after field name");
-                    ASTNode* f_val = parse_expression(parser);
-                    node->as.obj_inst.fields[node->as.obj_inst.count] = strdup(f_name.lexeme);
-                    node->as.obj_inst.values[node->as.obj_inst.count] = f_val;
-                    node->as.obj_inst.count++;
-                } while (match_p(parser, TOKEN_COMMA));
-            }
-            consume(parser, TOKEN_RBRACE, "Expected '}' after instantiation fields");
-            return node;
-        }
-        
         ASTNode* node = create_node(AST_VARIABLE, name.line);
         node->as.var_name = strdup(name.lexeme);
         return node;

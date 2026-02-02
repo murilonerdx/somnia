@@ -1,0 +1,8 @@
+FROM gcc:13-bookworm
+
+# Install runtime dependencies for Somnia
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /data

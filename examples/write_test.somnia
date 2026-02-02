@@ -1,0 +1,7 @@
+
+fun main() {
+    println("Writing to test.txt")
+    var res = native_fs_write("test_log.txt", "HELLO_FROM_DOCKER")
+    println("Write result: " + native_to_string(res))
+}
+main()

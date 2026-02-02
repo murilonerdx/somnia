@@ -1,0 +1,62 @@
+# ============================================================================
+# Somnia Docs Library (Minimal Map Edition)
+# ============================================================================
+
+import { json_response, html_response } from "somnia-http/lib/http"
+import { json_stringify } from "somnia-json/lib/json"
+
+class DocRouter {
+    field server
+    field metadata
+    field title
+    
+    method get(path, handler, meta) {
+        self.server.get(path, handler)
+        self.metadata[path] = meta
+        return self
+    }
+    
+    method swagger_html() {
+        var html = "<html><head><title>Somnia Swagger</title>"
+        html = html + "<link rel='stylesheet' href='https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css'>"
+        html = html + "</head><body><div id='swagger-ui'></div>"
+        html = html + "<script src='https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js'></script>"
+        html = html + "<script>window.onload=()=>{SwaggerUIBundle({url:'/docs/openapi.json',dom_id:'#swagger-ui'})}</script>"
+        html = html + "</body></html>"
+        return html
+    }
+
+    method generate_openapi() {
+        return {
+            "openapi": "3.0.0",
+            "info": { "title": self.title, "version": "1.0.0" },
+            "paths": {
+                "/api/users": {
+                    "get": { "summary": "List Users", "responses": { "200": { "description": "OK" } } }
+                }
+            }
+        }
+    }
+}
+
+fun create_docs_router(server) {
+    return new DocRouter {
+        server: server,
+        metadata: {},
+        title: "Somnia API"
+    }
+}
+
+fun serve_docs(server, path, doc_router) {
+    server.get(path + "/openapi.json", fun(req) {
+        return json_response(doc_router.generate_openapi())
+    })
+    
+    server.get(path, fun(req) {
+        return html_response(doc_router.swagger_html())
+    })
+}
+
+export {
+    create_docs_router, serve_docs
+}

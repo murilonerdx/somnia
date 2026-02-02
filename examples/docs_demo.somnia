@@ -1,0 +1,48 @@
+/*
+ * Somnia Docs Demo
+ * Demonstrates auto-generated Swagger UI
+ */
+
+import { create_server, json_response } from "somnia-http/lib/http"
+import { create_docs_router, serve_docs } from "somnia-docs/lib/docs"
+
+var server = create_server()
+var docs = create_docs_router(server.router)
+
+# 1. Define Handlers
+fun get_users(req) {
+    return json_response([
+        { "id": 1, "name": "Alice" },
+        { "id": 2, "name": "Bob" }
+    ])
+}
+
+fun create_user(req) {
+    return json_response({ "status": "created", "id": 3 })
+}
+
+# 2. Register Routes with Metadata
+docs.get("/users", get_users, {
+    "summary": "List all users",
+    "description": "Returns a list of all registered users in the system.",
+    "tags": ["Users"],
+    "response": { "200": "Successful response" }
+})
+
+docs.post("/users", create_user, {
+    "summary": "Create a new user",
+    "tags": ["Users"],
+    "body": {
+        "username": "string",
+        "email": "string",
+        "age": "number"
+    }
+})
+
+# 3. Serve Interaction UI
+serve_docs(server, "/docs", docs)
+
+# 4. Start Server
+println("[DEBUG] Starting Docs Server on 8080...")
+println("[DEBUG] Server type: " + native_to_string(server))
+server.listen(8080)

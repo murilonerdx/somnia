@@ -25,6 +25,7 @@ Interpreter* interpreter_create(void) {
     interp->recur_depth = 0;
     interp->temp_count = 0;
     interp->cognitive_state = env_create(NULL);
+    interp->vfs = value_map().as.map;
     
     // Register standard library
     stdlib_register(interp->global_env);
@@ -492,7 +493,14 @@ static void execute(Interpreter* interp, ASTNode* node) {
                 // Mark as loaded
                 env_define(interp->global_env, full_path, value_bool(true), true);
                 
-                char* source = read_file(full_path);
+                char* source = NULL;
+                Value* vfs_entry = map_get(interp->vfs, full_path);
+                if (vfs_entry != NULL && vfs_entry->type == VAL_STRING) {
+                    source = strdup(vfs_entry->as.string);
+                } else {
+                    source = read_file(full_path);
+                }
+                
                 if (source) {
                     Lexer* lexer = lexer_create(source);
                     lexer_scan_tokens(lexer);

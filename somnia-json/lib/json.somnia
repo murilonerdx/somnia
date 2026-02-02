@@ -3,6 +3,12 @@
 # Pure Somnia JSON serialization and deserialization
 # ============================================================================
 
+# Helper functions
+fun string_starts_with(str, prefix) {
+    if (len(str) < len(prefix)) { return false }
+    return substr(str, 0, len(prefix)) == prefix
+}
+
 # ============================================================================
 # JSON VALUE TYPES
 # ============================================================================
@@ -54,27 +60,27 @@ class JsonValue {
 
 # Factory functions for JsonValue
 fun json_string(value: string) {
-    return JsonValue { type: "string", data: value }
+    return new JsonValue { type: "string", data: value }
 }
 
 fun json_number(value: number) {
-    return JsonValue { type: "number", data: value }
+    return new JsonValue { type: "number", data: value }
 }
 
 fun json_bool(value: bool) {
-    return JsonValue { type: "bool", data: value }
+    return new JsonValue { type: "bool", data: value }
 }
 
 fun json_null() {
-    return JsonValue { type: "null", data: null }
+    return new JsonValue { type: "null", data: null }
 }
 
 fun json_array(items: list) {
-    return JsonValue { type: "array", data: items }
+    return new JsonValue { type: "array", data: items }
 }
 
 fun json_object(entries: map) {
-    return JsonValue { type: "object", data: entries }
+    return new JsonValue { type: "object", data: entries }
 }
 
 # ============================================================================
@@ -82,10 +88,10 @@ fun json_object(entries: map) {
 # ============================================================================
 
 class JsonParser {
-    field input: string
-    field position: number
-    field line: number
-    field column: number
+    field input
+    field position
+    field line
+    field column
     
     method parse() {
         self.skip_whitespace()
@@ -135,9 +141,11 @@ class JsonParser {
                     }
                     result = result + native_unicode(hex)
                 }
-                default => result = result + escaped
+                if (true) {
+                    result = result + escaped
+                }
             }
-            default => {
+            if (self.position < len(self.input) and self.peek() != "\"") {
                 result = result + self.peek()
                 self.advance()
             }
@@ -154,11 +162,8 @@ class JsonParser {
         when self.peek() == "-" => self.advance()
         
         # Integer part
-        when self.peek() == "0" => {
-            self.advance()
-        }
-        default => {
-            while self.is_digit(self.peek()) {
+        if (self.peek() != "0") {
+            while (self.is_digit(self.peek())) {
                 self.advance()
             }
         }
@@ -271,11 +276,7 @@ class JsonParser {
     
     method advance() {
         when self.position < len(self.input) => {
-            when self.peek() == "\n" => {
-                self.line = self.line + 1
-                self.column = 1
-            }
-            default => {
+            if (self.peek() != "\n") {
                 self.column = self.column + 1
             }
             self.position = self.position + 1
@@ -295,10 +296,10 @@ class JsonParser {
     method skip_whitespace() {
         while self.position < len(self.input) {
             var char = self.peek()
-            when char == " " or char == "\t" or char == "\n" or char == "\r" => {
-                self.advance()
+            if (not (char == " " or char == "\t" or char == "\n" or char == "\r")) {
+                break
             }
-            default => break
+            self.advance()
         }
     }
     
@@ -312,9 +313,9 @@ class JsonParser {
 # ============================================================================
 
 class JsonSerializer {
-    field indent: bool
-    field indent_size: number
-    field current_indent: number
+    field indent
+    field indent_size
+    field current_indent
     
     method serialize(value: JsonValue) {
         return self.serialize_value(value)
@@ -323,7 +324,10 @@ class JsonSerializer {
     method serialize_value(value: JsonValue) {
         when value.type == "string" => return self.serialize_string(value.data)
         when value.type == "number" => return self.serialize_number(value.data)
-        when value.type == "bool" => return if value.data then "true" else "false"
+        when value.type == "bool" => {
+            if (value.data) { return "true" }
+            return "false"
+        }
         when value.type == "null" => return "null"
         when value.type == "array" => return self.serialize_array(value.data)
         when value.type == "object" => return self.serialize_object(value.data)
@@ -336,12 +340,9 @@ class JsonSerializer {
         for i in range(0, len(value)) {
             var char = string_substring(value, i, i + 1)
             
-            when char == "\"" => result = result + "\\\""
-            when char == "\\" => result = result + "\\\\"
-            when char == "\n" => result = result + "\\n"
-            when char == "\r" => result = result + "\\r"
-            when char == "\t" => result = result + "\\t"
-            default => result = result + char
+            if (not (char == "\"" or char == "\\" or char == "\n" or char == "\r" or char == "\t")) {
+                result = result + char
+            }
         }
         
         return result + "\""
@@ -428,7 +429,7 @@ class JsonSerializer {
 # ============================================================================
 
 fun json_parse(input: string) {
-    var parser = JsonParser { 
+    var parser = new JsonParser { 
         input: input, 
         position: 0, 
         line: 1, 
@@ -438,7 +439,7 @@ fun json_parse(input: string) {
 }
 
 fun json_stringify(value: JsonValue) {
-    var serializer = JsonSerializer { 
+    var serializer = new JsonSerializer { 
         indent: false, 
         indent_size: 2, 
         current_indent: 0 
@@ -447,7 +448,7 @@ fun json_stringify(value: JsonValue) {
 }
 
 fun json_stringify_pretty(value: JsonValue) {
-    var serializer = JsonSerializer { 
+    var serializer = new JsonSerializer { 
         indent: true, 
         indent_size: 2, 
         current_indent: 0 
@@ -523,5 +524,7 @@ export {
     json_stringify,
     json_stringify_pretty,
     to_json,
-    from_json
+    from_json,
+    json_parse,
+    json_stringify
 }

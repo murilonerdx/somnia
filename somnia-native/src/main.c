@@ -114,6 +114,89 @@ static int run_file(const char* path) {
     return 0;
 }
 
+static int run_bundle(const char* path) {
+    printf("[BUNDLE] Loading %s...\n", path);
+    fflush(stdout);
+    FILE* file = fopen(path, "rb");
+    if (!file) {
+        fprintf(stderr, "[ERROR] Could not open bundle: %s\n", path);
+        return 1;
+    }
+
+    char header[7];
+    if (fread(header, 1, 7, file) != 7 || memcmp(header, "SOMNIA", 6) != 0) {
+        fprintf(stderr, "[ERROR] Not a valid .som bundle\n");
+        fclose(file);
+        return 1;
+    }
+
+    uint16_t entry_len;
+    if (fread(&entry_len, 2, 1, file) != 1) { fclose(file); return 1; }
+    char* entry_point = malloc(entry_len + 1);
+    fread(entry_point, 1, entry_len, file);
+    entry_point[entry_len] = '\0';
+    
+    printf("[BUNDLE] Entry point: %s\n", entry_point);
+    fflush(stdout);
+
+    uint32_t file_count;
+    if (fread(&file_count, 4, 1, file) != 1) { free(entry_point); fclose(file); return 1; }
+    
+    printf("[BUNDLE] Files found: %u\n", file_count);
+    fflush(stdout);
+
+    Interpreter* interp = interpreter_create();
+    global_interp_for_signals = interp;
+
+    for (uint32_t i = 0; i < file_count; i++) {
+        uint16_t p_len;
+        if (fread(&p_len, 2, 1, file) != 1) break;
+        char* p_str = malloc(p_len + 1);
+        fread(p_str, 1, p_len, file);
+        p_str[p_len] = '\0';
+
+        uint32_t c_len;
+        if (fread(&c_len, 4, 1, file) != 1) { free(p_str); break; }
+        char* c_str = malloc(c_len + 1);
+        fread(c_str, 1, c_len, file);
+        c_str[c_len] = '\0';
+
+        map_set(interp->vfs, p_str, value_string(c_str));
+        free(p_str);
+        free(c_str);
+    }
+    fclose(file);
+
+    printf("[BUNDLE] VFS populated. Starting execution...\n\n");
+    fflush(stdout);
+
+    // Run the entry point from VFS
+    Value* entry_source_val = map_get(interp->vfs, entry_point);
+    if (!entry_source_val || entry_source_val->type != VAL_STRING) {
+        fprintf(stderr, "[ERROR] Entry point %s not found in bundle\n", entry_point);
+        free(entry_point);
+        interpreter_free(interp);
+        return 1;
+    }
+
+    Lexer* lexer = lexer_create(entry_source_val->as.string);
+    lexer_scan_tokens(lexer);
+    Parser* parser = parser_create(lexer->tokens, lexer->token_count);
+    ASTNode* program = parser_parse(parser);
+
+    interpreter_run(interp, program);
+
+    // Cleanup
+    interpreter_free(interp);
+    ast_free(program);
+    parser_free(parser);
+    lexer_free(lexer);
+    free(entry_point);
+
+    printf("\n[DONE] Bundle execution complete\n");
+    return 0;
+}
+
 /* ============================================================================
  * REPL
  * ============================================================================ */
@@ -209,8 +292,11 @@ int main(int argc, char* argv[]) {
     
     if (strcmp(command, "run") == 0) {
         if (argc < 3) {
-            fprintf(stderr, "Usage: %s run <file.somnia>\n", argv[0]);
+            fprintf(stderr, "Usage: %s run <file.somnia|.som>\n", argv[0]);
             return 1;
+        }
+        if (strstr(argv[2], ".som") != NULL && strstr(argv[2], ".somnia") == NULL) {
+            return run_bundle(argv[2]);
         }
         return run_file(argv[2]);
     }
@@ -232,8 +318,9 @@ int main(int argc, char* argv[]) {
     }
     
     // If command looks like a file, run it directly
-    if (strstr(command, ".somnia") != NULL || strstr(command, ".somni") != NULL) {
-        return run_file(command);
+    if (strstr(command, ".som") != NULL) {
+        if (strstr(command, ".somnia") != NULL) return run_file(command);
+        return run_bundle(command);
     }
     
     fprintf(stderr, "Unknown command: %s\n", command);
